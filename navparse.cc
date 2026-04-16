@@ -2387,7 +2387,7 @@ try
 
         if(isnan(res.preddop)) {
           cerr<<"Problem with doppler calculation for C"<<id.sv<<": "<<endl;
-          exit(1);
+          return 1;
         }
         
         time_t t = utcFromGPS(nmm.rfd().rcvwn(), nmm.rfd().rcvtow());

@@ -25,6 +25,13 @@ using namespace std;
 
 extern const char* g_gitHash;
 
+static void shutdownNcurses()
+{
+  if(!isendwin()) {
+    endwin();
+  }
+}
+
 struct WinKeeper
 {
   WinKeeper();
@@ -164,6 +171,7 @@ void WinKeeper::setStatus(int sv, std::string_view line)
 int main(int argc, char** argv)
 {
   std::atexit(google::protobuf::ShutdownProtobufLibrary);
+  std::atexit(shutdownNcurses);
   GOOGLE_PROTOBUF_VERIFY_VERSION;
   bool doVERSION{false};
 
