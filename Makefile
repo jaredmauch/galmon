@@ -158,10 +158,12 @@ check: testrunner ubxtool
 	python3 ./tools/navparse_navdump_fixture_harness.py
 	python3 ./tools/rtcmtool_septool_fixture_harness.py
 	python3 ./tools/rinreport_rinjoin_fixture_harness.py
+	python3 ./tools/nav_pipeline_fixture_harness.py
 
 check-valgrind: testrunner ubxtool navparse navdump rtcmtool septool rinreport rinjoin
 	@command -v valgrind >/dev/null 2>&1 || { echo "valgrind is required for check-valgrind"; exit 1; }
 	valgrind --quiet --leak-check=full --show-leak-kinds=all --errors-for-leak-kinds=definite,possible,indirect --error-exitcode=99 ./testrunner
+	python3 ./tools/apps_smoke_harness.py --valgrind
 	python3 ./tools/ubxtool_safety_harness.py --iterations 10 --valgrind
 	python3 ./tools/navparse_navdump_fixture_harness.py --valgrind
 	python3 ./tools/rtcmtool_septool_fixture_harness.py --valgrind
@@ -188,6 +190,9 @@ rtcmtool-septool-fixture-check: navmon.pb.cc rtcmtool septool
 
 rinreport-rinjoin-fixture-check: rinreport rinjoin
 	python3 ./tools/rinreport_rinjoin_fixture_harness.py
+
+nav-pipeline-fixture-check: navrecv navmerge navcat navnexus
+	python3 ./tools/nav_pipeline_fixture_harness.py
 
 coverage:
 	$(MAKE) clean

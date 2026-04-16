@@ -1,0 +1,5 @@
+galmon tools (navrecv) <HASH>
+built date <BUILD_DATE>
+(C) AHU Holding BV - bert@hubertnet.nl - https://berthub.eu/
+https://galmon.eu/ - https://github.com/ahupowerdns/galmon
+License GPLv3: GNU GPL version 3  https://gnu.org/licenses/gpl.html
