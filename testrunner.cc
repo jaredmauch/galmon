@@ -3,6 +3,11 @@
 #include "ext/doctest.h"
 #include "ephemeris.hh"
 #include "navmon.hh"
+#include <atomic>
+#include <chrono>
+#include <httplib.h>
+#include <nlohmann/json.hpp>
+#include <thread>
 
 TEST_CASE("testing ephemeris age") {
     CHECK(ephAge(0,0) == 0);
@@ -103,4 +108,208 @@ TEST_CASE("ubx empty payload framing") {
   uint16_t checksum = calcUbxChecksum(msg[2], msg[3], empty_payload);
   CHECK((checksum & 0xFF) == msg[6]);
   CHECK((checksum >> 8) == msg[7]);
+}
+
+TEST_CASE("httplib client server integration on high port") {
+  httplib::Server server;
+  server.Get("/health", [](const httplib::Request&, httplib::Response& res) {
+    res.set_content("ok", "text/plain");
+    res.status = 200;
+  });
+
+  auto port = server.bind_to_any_port("127.0.0.1");
+  REQUIRE(port > 1024);
+
+  std::atomic<bool> listening{false};
+  std::thread serverThread([&]() {
+    listening = true;
+    server.listen_after_bind();
+  });
+
+  while (!listening) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+
+  httplib::Client client("127.0.0.1", port);
+  client.set_connection_timeout(1, 0);
+  client.set_read_timeout(1, 0);
+  client.set_write_timeout(1, 0);
+
+  auto response = client.Get("/health");
+  for (int attempt = 0; attempt < 20 && !response; ++attempt) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    response = client.Get("/health");
+  }
+
+  REQUIRE(response);
+  CHECK(response->status == 200);
+  CHECK(response->body == "ok");
+
+  server.stop();
+  serverThread.join();
+}
+
+TEST_CASE("httplib detailed checks for navparse-style URL codepaths") {
+  httplib::Server server;
+  auto set_json = [](httplib::Response& res, const nlohmann::json& body) {
+    res.set_content(body.dump(), "application/json");
+    res.status = 200;
+  };
+
+  server.Get("/global.json", [&](const httplib::Request& req, httplib::Response& res) {
+    set_json(res, {{"endpoint", "global"}, {"method", req.method}, {"ok", true}});
+  });
+  server.Post("/global.json", [&](const httplib::Request& req, httplib::Response& res) {
+    set_json(res, {{"endpoint", "global"}, {"method", req.method}, {"ok", true}});
+  });
+
+  server.Get("/almanac.json", [&](const httplib::Request& req, httplib::Response& res) {
+    set_json(res, {{"endpoint", "almanac"}, {"method", req.method}, {"entries", nlohmann::json::array()}});
+  });
+  server.Post("/almanac.json", [&](const httplib::Request& req, httplib::Response& res) {
+    set_json(res, {{"endpoint", "almanac"}, {"method", req.method}, {"entries", nlohmann::json::array()}});
+  });
+
+  server.Get("/observers.json", [&](const httplib::Request& req, httplib::Response& res) {
+    set_json(res, {{"endpoint", "observers"}, {"method", req.method}, {"observers", nlohmann::json::array()}});
+  });
+  server.Post("/observers.json", [&](const httplib::Request& req, httplib::Response& res) {
+    set_json(res, {{"endpoint", "observers"}, {"method", req.method}, {"observers", nlohmann::json::array()}});
+  });
+
+  server.Get("/sv.json", [&](const httplib::Request& req, httplib::Response& res) {
+    set_json(res,
+             {{"endpoint", "sv"},
+              {"method", req.method},
+              {"sv", req.get_param_value("sv")},
+              {"gnssid", req.get_param_value("gnssid")},
+              {"sigid", req.has_param("sigid") ? req.get_param_value("sigid") : "1"}});
+  });
+  server.Post("/sv.json", [&](const httplib::Request& req, httplib::Response& res) {
+    set_json(res,
+             {{"endpoint", "sv"},
+              {"method", req.method},
+              {"sv", req.get_param_value("sv")},
+              {"gnssid", req.get_param_value("gnssid")},
+              {"sigid", req.has_param("sigid") ? req.get_param_value("sigid") : "1"}});
+  });
+
+  server.Get("/cov.json", [&](const httplib::Request& req, httplib::Response& res) {
+    set_json(res,
+             {{"endpoint", "cov"},
+              {"method", req.method},
+              {"gps", req.has_param("gps") ? req.get_param_value("gps") : "0"},
+              {"galileo", req.has_param("galileo") ? req.get_param_value("galileo") : "1"},
+              {"beidou", req.has_param("beidou") ? req.get_param_value("beidou") : "0"},
+              {"glonass", req.has_param("glonass") ? req.get_param_value("glonass") : "0"}});
+  });
+  server.Post("/cov.json", [&](const httplib::Request& req, httplib::Response& res) {
+    set_json(res,
+             {{"endpoint", "cov"},
+              {"method", req.method},
+              {"gps", req.has_param("gps") ? req.get_param_value("gps") : "0"},
+              {"galileo", req.has_param("galileo") ? req.get_param_value("galileo") : "1"},
+              {"beidou", req.has_param("beidou") ? req.get_param_value("beidou") : "0"},
+              {"glonass", req.has_param("glonass") ? req.get_param_value("glonass") : "0"}});
+  });
+
+  server.Get("/sbas.json", [&](const httplib::Request& req, httplib::Response& res) {
+    set_json(res, {{"endpoint", "sbas"}, {"method", req.method}, {"status", nlohmann::json::object()}});
+  });
+  server.Post("/sbas.json", [&](const httplib::Request& req, httplib::Response& res) {
+    set_json(res, {{"endpoint", "sbas"}, {"method", req.method}, {"status", nlohmann::json::object()}});
+  });
+
+  server.Get("/svs.json", [&](const httplib::Request& req, httplib::Response& res) {
+    set_json(res, {{"endpoint", "svs"}, {"method", req.method}, {"svs", nlohmann::json::object()}});
+  });
+  server.Post("/svs.json", [&](const httplib::Request& req, httplib::Response& res) {
+    set_json(res, {{"endpoint", "svs"}, {"method", req.method}, {"svs", nlohmann::json::object()}});
+  });
+
+  server.Get("/sbstatus.json", [&](const httplib::Request& req, httplib::Response& res) {
+    set_json(res, {{"endpoint", "sbstatus"}, {"method", req.method}, {"entries", nlohmann::json::array()}});
+  });
+  server.Post("/sbstatus.json", [&](const httplib::Request& req, httplib::Response& res) {
+    set_json(res, {{"endpoint", "sbstatus"}, {"method", req.method}, {"entries", nlohmann::json::array()}});
+  });
+
+  auto port = server.bind_to_any_port("127.0.0.1");
+  REQUIRE(port > 1024);
+  std::thread serverThread([&]() { server.listen_after_bind(); });
+
+  httplib::Client client("127.0.0.1", port);
+  client.set_connection_timeout(1, 0);
+  client.set_read_timeout(1, 0);
+  client.set_write_timeout(1, 0);
+
+  auto callAndCheck = [&](const std::string& method,
+                          const std::string& path,
+                          const std::string& endpoint,
+                          const std::function<void(const nlohmann::json&)>& verify) {
+    httplib::Result response;
+    for (int attempt = 0; attempt < 20 && !response; ++attempt) {
+      if (method == "GET") {
+        response = client.Get(path.c_str());
+      }
+      else {
+        response = client.Post(path.c_str(), "", "text/plain");
+      }
+      if (!response) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
+    }
+    REQUIRE(response);
+    CHECK(response->status == 200);
+    CHECK(response->get_header_value("Content-Type").find("application/json") != std::string::npos);
+    auto parsed = nlohmann::json::parse(response->body);
+    CHECK(parsed.at("endpoint").get<std::string>() == endpoint);
+    CHECK(parsed.at("method").get<std::string>() == method);
+    verify(parsed);
+  };
+
+  callAndCheck("GET", "/global.json", "global", [&](const nlohmann::json& parsed) { CHECK(parsed.at("ok").get<bool>()); });
+  callAndCheck("POST", "/global.json", "global", [&](const nlohmann::json& parsed) { CHECK(parsed.at("ok").get<bool>()); });
+
+  callAndCheck("GET", "/almanac.json", "almanac", [&](const nlohmann::json& parsed) { CHECK(parsed.at("entries").is_array()); });
+  callAndCheck("POST", "/almanac.json", "almanac", [&](const nlohmann::json& parsed) { CHECK(parsed.at("entries").is_array()); });
+
+  callAndCheck("GET", "/observers.json", "observers", [&](const nlohmann::json& parsed) { CHECK(parsed.at("observers").is_array()); });
+  callAndCheck("POST", "/observers.json", "observers", [&](const nlohmann::json& parsed) { CHECK(parsed.at("observers").is_array()); });
+
+  callAndCheck("GET", "/sv.json?sv=12&gnssid=2&sigid=5", "sv", [&](const nlohmann::json& parsed) {
+    CHECK(parsed.at("sv").get<std::string>() == "12");
+    CHECK(parsed.at("gnssid").get<std::string>() == "2");
+    CHECK(parsed.at("sigid").get<std::string>() == "5");
+  });
+  callAndCheck("POST", "/sv.json?sv=12&gnssid=2", "sv", [&](const nlohmann::json& parsed) {
+    CHECK(parsed.at("sv").get<std::string>() == "12");
+    CHECK(parsed.at("gnssid").get<std::string>() == "2");
+    CHECK(parsed.at("sigid").get<std::string>() == "1");
+  });
+
+  callAndCheck("GET", "/cov.json?gps=1&galileo=0&beidou=1&glonass=1", "cov", [&](const nlohmann::json& parsed) {
+    CHECK(parsed.at("gps").get<std::string>() == "1");
+    CHECK(parsed.at("galileo").get<std::string>() == "0");
+    CHECK(parsed.at("beidou").get<std::string>() == "1");
+    CHECK(parsed.at("glonass").get<std::string>() == "1");
+  });
+  callAndCheck("POST", "/cov.json", "cov", [&](const nlohmann::json& parsed) {
+    CHECK(parsed.at("gps").get<std::string>() == "0");
+    CHECK(parsed.at("galileo").get<std::string>() == "1");
+    CHECK(parsed.at("beidou").get<std::string>() == "0");
+    CHECK(parsed.at("glonass").get<std::string>() == "0");
+  });
+
+  callAndCheck("GET", "/sbas.json", "sbas", [&](const nlohmann::json& parsed) { CHECK(parsed.at("status").is_object()); });
+  callAndCheck("POST", "/sbas.json", "sbas", [&](const nlohmann::json& parsed) { CHECK(parsed.at("status").is_object()); });
+
+  callAndCheck("GET", "/svs.json", "svs", [&](const nlohmann::json& parsed) { CHECK(parsed.at("svs").is_object()); });
+  callAndCheck("POST", "/svs.json", "svs", [&](const nlohmann::json& parsed) { CHECK(parsed.at("svs").is_object()); });
+
+  callAndCheck("GET", "/sbstatus.json", "sbstatus", [&](const nlohmann::json& parsed) { CHECK(parsed.at("entries").is_array()); });
+  callAndCheck("POST", "/sbstatus.json", "sbstatus", [&](const nlohmann::json& parsed) { CHECK(parsed.at("entries").is_array()); });
+
+  server.stop();
+  serverThread.join();
 }

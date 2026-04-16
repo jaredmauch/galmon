@@ -151,10 +151,11 @@ testrunner: navmon.pb.o testrunner.o ubx.o bits.o  galileo.o  gps.o beidou.o eph
 gndate: gndate.o githash.o  navmon.o
 	$(CXX) $(GCCSTD) $^ -o $@ -L/usr/local/lib -lfmt
 
-check: testrunner ubxtool
+check: testrunner ubxtool navparse
 	./testrunner
 	python3 ./tools/ubxtool_safety_harness.py --iterations 10
 	python3 ./tools/navparse_navdump_fixture_harness.py
+	python3 ./tools/navparse_http_harness.py
 	python3 ./tools/rtcmtool_septool_fixture_harness.py
 	python3 ./tools/rinreport_rinjoin_fixture_harness.py
 	python3 ./tools/nav_pipeline_fixture_harness.py
@@ -183,6 +184,9 @@ apps-valgrind-check: $(PROGRAMS)
 
 navparse-navdump-fixture-check: navmon.pb.cc navparse navdump
 	python3 ./tools/navparse_navdump_fixture_harness.py
+
+navparse-http-check: navparse
+	python3 ./tools/navparse_http_harness.py
 
 rtcmtool-septool-fixture-check: navmon.pb.cc rtcmtool septool
 	python3 ./tools/rtcmtool_septool_fixture_harness.py
