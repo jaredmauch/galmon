@@ -145,7 +145,7 @@ septool: navmon.pb.o septool.o bits.o  galileo.o  gps.o beidou.o navmon.o epheme
 	$(CXX) $(GCCSTD) $^ -o $@ -L/usr/local/lib -lprotobuf -pthread -lzstd -lfmt	
 
 
-testrunner: navmon.pb.o testrunner.o ubx.o bits.o  galileo.o  gps.o beidou.o glonass.o ephemeris.o sp3.o osen.o navmon.o rinex.o githash.o influxpush.o minicurl.o
+testrunner: navmon.pb.o testrunner.o ubx.o bits.o  galileo.o  gps.o beidou.o glonass.o sbas.o ephemeris.o sp3.o osen.o navmon.o rinex.o githash.o influxpush.o minicurl.o
 	$(CXX) $(GCCSTD) $^ -o $@ -L/usr/local/lib -lprotobuf -lz  -pthread -lfmt -lcpp-httplib -lcurl
 
 gndate: gndate.o githash.o  navmon.o

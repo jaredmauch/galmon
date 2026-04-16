@@ -5,6 +5,8 @@
 #include "glonass.hh"
 #include "gps.hh"
 #include "beidou.hh"
+#include "sbas.hh"
+#include "bits.hh"
 #include "influxpush.hh"
 #include "navmon.hh"
 #include <atomic>
@@ -585,4 +587,106 @@ TEST_CASE("gps coordinate propagation returns finite position") {
   CHECK(std::isfinite(p.y));
   CHECK(std::isfinite(p.z));
   CHECK((fabs(p.x) + fabs(p.y) + fabs(p.z)) > 1.0);
+}
+
+TEST_CASE("sbas parse1 builds slot->PRN mapping and filters PRNs >=37") {
+  SBASState st;
+  const time_t now = time(0);
+
+  std::vector<uint8_t> msg(32, 0);
+  // parse1: d_slot2prn[slot]=prn+1 for bits at position 14+prn when set.
+  // Set PRNs: 0,1,2 => slots 1,2,3 mapping to prn+1 => 1,2,3
+  setbitu(msg.data(), 14 + 0, 1, 1);
+  setbitu(msg.data(), 14 + 1, 1, 1);
+  setbitu(msg.data(), 14 + 2, 1, 1);
+  // Add PRN 37 => next slot would map to prn+1=38 which should be filtered to -1 for SBASNumber.
+  setbitu(msg.data(), 14 + 37, 1, 1);
+
+  st.parse1(msg, now);
+
+  CHECK(st.getSBASNumber(1) == 1);
+  CHECK(st.getSBASNumber(2) == 2);
+  CHECK(st.getSBASNumber(3) == 3);
+  CHECK(st.getSBASNumber(4) == -1);
+
+  auto sid = st.getSBASSatID(4);
+  CHECK(sid.gnss == 255); // filtered out
+}
+
+TEST_CASE("sbas parse2_5 + parse6 produce coherent fast corrections for mapped slots") {
+  SBASState st;
+  const time_t now = 1000;
+  std::vector<uint8_t> msgMap(32, 0);
+
+  // parse1 uses PRN mask bits at position 14+prn (len=1) to build slot->(prn+1).
+  // Make parse1 create slot mappings for slots 1..13 (PRNs 0..12 => prn+1=1..13).
+  for(int prn = 0; prn <= 12; ++prn) {
+    setbitu(msgMap.data(), 14 + prn, 1, 1);
+  }
+
+  st.parse1(msgMap, now);
+
+  // Ensure our synthesized parse1 message creates the expected mapping:
+  // for PRNs 0..12 (set at positions 14+prn), parse1 creates slot2prn such that
+  // slot i maps to prn=i-1 => SBAS sv=i.
+  REQUIRE(st.d_slot2prn.size() == 13);
+  for(int slot = 1; slot <= 13; ++slot) {
+    REQUIRE(st.d_slot2prn.count(slot) == 1);
+    CHECK(st.d_slot2prn[slot] == slot);
+    auto sid = st.getSBASSatID(slot);
+    CHECK(sid.gnss == 0);
+    CHECK(sid.sv == (uint32_t)slot);
+  }
+
+  // parse2_5/parse6 read correction/udrei fields from a different SBAS frame layout,
+  // so use a separate buffer to avoid overwriting the PRN mask region.
+  std::vector<uint8_t> msgData(32, 0);
+
+  // parse2_5: type = getbitu(pos=8,len=6) in range [2..5]
+  setbitu(msgData.data(), 8, 6, 2);
+
+  // parse2_5 correction raw bits at: 14 + 4 + 12*pos, len=12
+  // We set raw correction = pos+1 => correction = (pos+1)*0.125
+  for(int pos = 0; pos < 13; ++pos) {
+    setbitu(msgData.data(), 14 + 4 + 12*pos, 12, (unsigned)(pos + 1));
+    // parse2_5 udrei raw bits at: 14 + 4 + 12*13 + 4*pos, len=4
+    setbitu(msgData.data(), 14 + 4 + 12*13 + 4*pos, 4, (unsigned)(pos + 1));
+  }
+
+  auto fast13 = st.parse2_5(msgData, now);
+  REQUIRE(fast13.size() == 13);
+
+  for(int pos = 0; pos < 13; ++pos) {
+    const int slot = 1 + pos; // type==2 => slot = 1+pos
+    CHECK(fast13[pos].id.sv == (unsigned)slot);
+    CHECK(fast13[pos].udrei == pos + 1);
+    CHECK(std::abs(fast13[pos].correction - (pos + 1) * 0.125) < 1e-12);
+  }
+
+  // parse6 updates udrei only.
+  // parse6: fc.udrei at 14 + 8 + 4*slot, where slot iterates 0..50, but only slots that exist in d_fast matter.
+  // Since our d_fast contains ids for slots 1..13, only slots 0..12 will be returned.
+  for(int slot = 0; slot < 13; ++slot) {
+    setbitu(msgData.data(), 14 + 8 + 4*slot, 4, (unsigned)(15 - slot)); // deterministic 0..15 values
+  }
+
+  auto fast13_updated = st.parse6(msgData, now + 10);
+  REQUIRE(fast13_updated.size() == 13);
+
+  for(int pos = 0; pos < 13; ++pos) {
+    const int slot = 1 + pos;
+    CHECK(fast13_updated[pos].id.sv == (unsigned)slot);
+    CHECK(fast13_updated[pos].udrei == 15 - pos);
+    CHECK(std::abs(fast13_updated[pos].correction - (pos + 1) * 0.125) < 1e-12);
+  }
+}
+
+TEST_CASE("sbas parse7 records latency from fixed bit-field") {
+  SBASState st;
+  const time_t now = 1000;
+  std::vector<uint8_t> msg(8, 0);
+  // parse7: d_latency = getbitu(pos=14+4,len=4)
+  setbitu(msg.data(), 14 + 4, 4, 7);
+  st.parse7(msg, now);
+  CHECK(st.d_latency == 7);
 }
