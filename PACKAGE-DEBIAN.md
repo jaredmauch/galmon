@@ -110,3 +110,10 @@ exist to give us reliable unattended installations for free.
 ### Signing key
 
 GPG Public Key [86E7F51C04FBAAB0](debian/86E7F51C04FBAAB0.asc)
+
+### TODO
+
+The `dpkg-buildpackage` "source version" line is read from `debian/changelog`.
+Our `debian/rules` override rewrites the binary package version date at `dh_gencontrol` time,
+so if we also want the source version output to include today's date, we need a pre-build step
+that updates `debian/changelog` before running `dpkg-buildpackage`.
