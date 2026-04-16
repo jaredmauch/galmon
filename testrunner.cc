@@ -39,6 +39,7 @@ TEST_CASE("sp3") {
 }
 
 #include "rinex.hh"
+#include "ubx.hh"
 TEST_CASE("rinex") {
   RINEXReader rinex("./rinex/PTGG00PHL_R_20193500000_01D_MN.rnx.gz");
   RINEXEntry e;
@@ -66,4 +67,40 @@ TEST_CASE("truncation") {
   CHECK(truncPrec(123.999, 0) == 124.0);
   
   
+}
+
+TEST_CASE("ubx message framing and checksum") {
+  std::vector<uint8_t> payload{0x10, 0x20, 0x30, 0x40};
+  auto msg = buildUbxMessage(0x01, 0x07, payload);
+
+  REQUIRE(msg.size() == payload.size() + 8);
+  CHECK(msg[0] == 0xB5);
+  CHECK(msg[1] == 0x62);
+  CHECK(msg[2] == 0x01);
+  CHECK(msg[3] == 0x07);
+  CHECK(msg[4] == payload.size());
+  CHECK(msg[5] == 0x00);
+
+  std::vector<uint8_t> extracted{msg.begin() + 6, msg.end() - 2};
+  CHECK(extracted == payload);
+
+  uint16_t checksum = calcUbxChecksum(msg[2], msg[3], extracted);
+  CHECK((checksum & 0xFF) == msg[msg.size() - 2]);
+  CHECK((checksum >> 8) == msg[msg.size() - 1]);
+}
+
+TEST_CASE("ubx empty payload framing") {
+  auto msg = buildUbxMessage(0x06, 0x01, {});
+  REQUIRE(msg.size() == 8);
+  CHECK(msg[0] == 0xB5);
+  CHECK(msg[1] == 0x62);
+  CHECK(msg[2] == 0x06);
+  CHECK(msg[3] == 0x01);
+  CHECK(msg[4] == 0x00);
+  CHECK(msg[5] == 0x00);
+
+  std::vector<uint8_t> empty_payload;
+  uint16_t checksum = calcUbxChecksum(msg[2], msg[3], empty_payload);
+  CHECK((checksum & 0xFF) == msg[6]);
+  CHECK((checksum >> 8) == msg[7]);
 }

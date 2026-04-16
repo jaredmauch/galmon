@@ -597,7 +597,7 @@ int main(int argc, char** argv)
     ns.addDestination(1);
   
   int fd = initFD(portName.c_str(), doRTSCTS);
-  if(!baudrate)
+  if(!baudrate && !g_fromFile)
     baudrate = getBaudrateFromSymbol(g_baudval);
 
   if(doFakeFix) // hack
