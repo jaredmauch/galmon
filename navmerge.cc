@@ -220,7 +220,7 @@ int main(int argc, char** argv)
 
   if(sources.empty()) {
     cerr<< "No sources defined. Exiting."<<endl;
-    exit(0);
+    return 0;
   }
 
   signal(SIGPIPE, SIG_IGN);
@@ -231,7 +231,7 @@ int main(int argc, char** argv)
     auto res=resolveName(s, true, true);
     if(res.empty()) {
       cerr<<"Unable to resolve '"<<s<<"' as destination for data, exiting"<<endl;
-      exit(EXIT_FAILURE);
+      return EXIT_FAILURE;
     }
     ns.addDestination(s); // ComboAddress(s, 29603));
   }
