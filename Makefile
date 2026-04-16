@@ -107,7 +107,7 @@ navdump: navdump.o  bits.o navmon.pb.o gps.o ephemeris.o beidou.o glonass.o navm
 # -lfec
 
 navdisplay: navdisplay.o  bits.o navmon.pb.o gps.o ephemeris.o beidou.o glonass.o ephemeris.o navmon.o osen.o githash.o
-	$(CXX) $(GCCSTD) $^ -o $@ -L/usr/local/lib -pthread  -lprotobuf -lncurses -lfmt
+	$(CXX) $(GCCSTD) $^ -o $@ -L/usr/local/lib -pthread  -lprotobuf -Wl,--as-needed -lncurses -lfmt
 
 
 navnexus: navnexus.o   $(SIMPLESOCKETS) bits.o navmon.pb.o storage.o githash.o
@@ -160,3 +160,13 @@ ubxtool-safety-check: ubxtool
 
 ubxtool-safety-valgrind-check: ubxtool
 	python3 ./tools/ubxtool_safety_harness.py --iterations 50 --valgrind
+
+apps-smoke-check: $(PROGRAMS)
+	python3 ./tools/apps_smoke_harness.py
+
+coverage:
+	$(MAKE) clean
+	$(MAKE) GCCSTD="$(GCCSTD) --coverage" CFLAGS='-O0 -Wall -ggdb -pedantic' testrunner ubxtool
+	./testrunner
+	python3 ./tools/ubxtool_safety_harness.py --iterations 10
+	python3 ./tools/coverage_report.py
