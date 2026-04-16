@@ -53,3 +53,19 @@ githash.h
 *.exe
 *.out
 *.app
+
+# local manpage generation staging output
+.mancheck/
+
+# Debian package build outputs (generated)
+debian/galmon/
+debian/.debhelper/
+debian/tmp/
+debian/files
+debian/*.debhelper
+debian/*.debhelper.log
+debian/*.substvars
+debian/debhelper-build-stamp
+*.deb
+*.buildinfo
+*.changes
