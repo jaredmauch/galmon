@@ -48,6 +48,7 @@ SIMPLESOCKETS=ext/powerblog/ext/simplesocket/swrappers.o ext/powerblog/ext/simpl
 clean:
 	rm -f *~ *.o *.d ext/*/*.o ext/*/*.d $(PROGRAMS) navmon.pb.h navmon.pb.cc $(patsubst %.cc,%.o,$(wildcard ext/sgp4/libsgp4/*.cc)) $(H2OPP) $(SIMPLESOCKETS)
 	rm -f ext/sgp4/libsgp4/*.d ext/powerblog/ext/simplesocket/*.d
+	rm -f *.gcov *.gcda *.gcno
 
 help2man:
 	$(INSTALL) -m 755 -d $(DESTDIR)$(prefix)/share/man/man1
@@ -154,6 +155,7 @@ gndate: gndate.o githash.o  navmon.o
 check: testrunner ubxtool
 	./testrunner
 	python3 ./tools/ubxtool_safety_harness.py --iterations 10
+	python3 ./tools/navparse_navdump_fixture_harness.py
 
 ubxtool-safety-check: ubxtool
 	python3 ./tools/ubxtool_safety_harness.py
@@ -163,6 +165,9 @@ ubxtool-safety-valgrind-check: ubxtool
 
 apps-smoke-check: $(PROGRAMS)
 	python3 ./tools/apps_smoke_harness.py
+
+navparse-navdump-fixture-check: navmon.pb.cc navparse navdump
+	python3 ./tools/navparse_navdump_fixture_harness.py
 
 coverage:
 	$(MAKE) clean
