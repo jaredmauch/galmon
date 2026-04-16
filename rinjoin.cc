@@ -2,7 +2,11 @@
 #include "rinex.hh"
 #include <map>
 #include <optional>
+#include "CLI/CLI.hpp"
+#include "version.hh"
 using namespace std;
+
+extern const char* g_gitHash;
 
 struct Value
 {
@@ -18,30 +22,57 @@ map<pair<time_t, int>, Value> satmap;
 
 int main(int argc, char** argv)
 {
-  for(int n = 1; n < argc; ++n) {
-    RINEXReader rr(argv[n]);
-    RINEXEntry e;
-    while(rr.get(e)) {
-      if(e.gnss != 2)
-        continue;
-      //      cout << e.t <<" " << e.sv <<" " << (int64_t)(rint(ldexp(e.af0,34))) <<" " << (int64_t)(rint(ldexp(e.BGDE1E5a,32)))<<" " << (int64_t)(rint(ldexp(e.BGDE1E5b,32))) <<" "<<e.clkflags <<endl;
-      auto& s=satmap[{e.t, e.sv}];
-      if(((unsigned int)e.clkflags) & 512) { // I/NAV
-        s.af0Inav = rint(ldexp(e.af0,34));
-        s.af1 = rint(ldexp(e.af1,46));
-        s.BGDE1E5a = rint(ldexp(e.BGDE1E5a,32));
-        s.BGDE1E5b = rint(ldexp(e.BGDE1E5b,32));
-        s.iod = e.iodnav;
+  string program("rinjoin");
+  CLI::App app(program);
+  vector<string> inputFiles;
+  bool doVERSION{false};
+
+  app.add_flag("--version", doVERSION, "show program version and copyright");
+  app.add_option("input", inputFiles, "Input RINEX files");
+
+  try {
+    app.parse(argc, argv);
+  }
+  catch(const CLI::Error &e) {
+    return app.exit(e);
+  }
+
+  if(doVERSION) {
+    showVersion(program.c_str(), g_gitHash);
+    return 0;
+  }
+  if(inputFiles.empty()) {
+    cerr<<"Need at least one input RINEX file\n";
+    return 1;
+  }
+
+  for(const auto& file : inputFiles) {
+    try {
+      RINEXReader rr(file);
+      RINEXEntry e;
+      while(rr.get(e)) {
+        if(e.gnss != 2)
+          continue;
+        //      cout << e.t <<" " << e.sv <<" " << (int64_t)(rint(ldexp(e.af0,34))) <<" " << (int64_t)(rint(ldexp(e.BGDE1E5a,32)))<<" " << (int64_t)(rint(ldexp(e.BGDE1E5b,32))) <<" "<<e.clkflags <<endl;
+        auto& s=satmap[{e.t, e.sv}];
+        if(((unsigned int)e.clkflags) & 512) { // I/NAV
+          s.af0Inav = rint(ldexp(e.af0,34));
+          s.af1 = rint(ldexp(e.af1,46));
+          s.BGDE1E5a = rint(ldexp(e.BGDE1E5a,32));
+          s.BGDE1E5b = rint(ldexp(e.BGDE1E5b,32));
+          s.iod = e.iodnav;
+        }
+        else {
+          s.af0Fnav = rint(ldexp(e.af0,34));
+          s.af1 = rint(ldexp(e.af1,46));
+          s.BGDE1E5a = rint(ldexp(e.BGDE1E5a,32));
+          // E1E5b unreliable on F/NAV somehow
+        }
       }
-      else {
-        s.af0Fnav = rint(ldexp(e.af0,34));
-        s.af1 = rint(ldexp(e.af1,46));
-        s.BGDE1E5a = rint(ldexp(e.BGDE1E5a,32));
-        // E1E5b unreliable on F/NAV somehow
-      }
-                         
     }
-    
+    catch(std::exception& e) {
+      cerr<<"Error processing file "<<file<<": "<<e.what()<<endl;
+    }
   }
   cout<<"timestamp sv iod af0fnav af0inav af1 bgde1e5a bgde1e5b\n";
   for(const auto& s : satmap) {
