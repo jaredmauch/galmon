@@ -29,12 +29,17 @@ def reserve_port() -> int:
     return port
 
 
-def request_json(base_url: str, method: str, path: str, timeout: float) -> tuple[int, dict[str, str], object]:
+def request_json(
+    base_url: str, method: str, path: str, timeout: float, extra_headers: dict[str, str] | None = None
+) -> tuple[int, dict[str, str], object]:
+    headers = {"Content-Type": "text/plain"}
+    if extra_headers:
+        headers.update(extra_headers)
     req = Request(
         f"{base_url}{path}",
         method=method,
         data=(b"" if method == "POST" else None),
-        headers={"Content-Type": "text/plain"},
+        headers=headers,
     )
     try:
         with urlopen(req, timeout=timeout) as resp:
@@ -59,8 +64,15 @@ def wait_until_ready(base_url: str, timeout: float) -> None:
     raise RuntimeError("navparse did not become ready before timeout")
 
 
-def assert_json_response(base_url: str, method: str, path: str, request_timeout: float, validator) -> None:
-    status, headers, payload = request_json(base_url, method, path, request_timeout)
+def assert_json_response(
+    base_url: str,
+    method: str,
+    path: str,
+    request_timeout: float,
+    validator,
+    extra_headers: dict[str, str] | None = None,
+) -> None:
+    status, headers, payload = request_json(base_url, method, path, request_timeout, extra_headers=extra_headers)
     if status != 200:
         raise RuntimeError(f"{method} {path}: expected HTTP 200, got {status}")
     if "application/json" not in headers.get("content-type", ""):
@@ -93,6 +105,11 @@ def validate_sv_payload(payload: object) -> None:
 
 
 def run_endpoint_checks(base_url: str, request_timeout: float) -> None:
+    client_profiles: list[tuple[str, dict[str, str]]] = [
+        ("unauthenticated", {}),
+        ("basic-auth-header", {"Authorization": "Basic dGVzdDp0ZXN0"}),
+        ("bearer-auth-header", {"Authorization": "Bearer test-token"}),
+    ]
     checks: list[tuple[str, str, Callable[[object], None]]] = [
         ("/global.json", "mapping", validate_mapping_payload),
         ("/almanac.json", "mapping", validate_mapping_payload),
@@ -104,9 +121,10 @@ def run_endpoint_checks(base_url: str, request_timeout: float) -> None:
         ("/sbstatus.json", "sequence", validate_sequence_payload),
     ]
     for path, shape, validator in checks:
-        for method in ("GET", "POST"):
-            assert_json_response(base_url, method, path, request_timeout, validator)
-            print(f"{method} {path}: OK ({shape})")
+        for client_label, auth_headers in client_profiles:
+            for method in ("GET", "POST"):
+                assert_json_response(base_url, method, path, request_timeout, validator, extra_headers=auth_headers)
+                print(f"{method} {path}: OK ({shape}, {client_label})")
 
 
 def main() -> int:
