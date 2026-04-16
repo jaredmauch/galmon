@@ -135,7 +135,7 @@ try
 
   if(doVERSION) {
     showVersion(program, g_gitHash);
-    exit(0);
+    return 0;
   }
 
   if(galwn>= 0) {

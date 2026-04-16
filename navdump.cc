@@ -285,7 +285,7 @@ try
   }
   if(doVERSION) {
     showVersion(program, g_gitHash);
-    exit(0);
+    return 0;
   }
   SVFilter svfilter;
   for(const auto& svp : svpairs) {

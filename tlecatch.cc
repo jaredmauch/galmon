@@ -32,7 +32,7 @@ int main(int argc, char **argv)
 
   if(doVERSION) {
     showVersion(program, g_gitHash);
-    exit(0);
+    return 0;
   }
 
   for(;;) {

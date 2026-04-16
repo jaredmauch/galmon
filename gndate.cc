@@ -30,7 +30,7 @@ try
 
   if(doVERSION) {
     showVersion(program.c_str(), g_gitHash);
-    exit(0);
+    return 0;
   }
 
   

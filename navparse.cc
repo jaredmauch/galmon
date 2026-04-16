@@ -663,7 +663,7 @@ try
 
   if(doVERSION) {
     showVersion(program, g_gitHash);
-    exit(0);
+    return 0;
   }
 
   //  feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW ); 
