@@ -157,6 +157,7 @@ check: testrunner ubxtool
 	python3 ./tools/ubxtool_safety_harness.py --iterations 10
 	python3 ./tools/navparse_navdump_fixture_harness.py
 	python3 ./tools/rtcmtool_septool_fixture_harness.py
+	python3 ./tools/rinreport_rinjoin_fixture_harness.py
 
 ubxtool-safety-check: ubxtool
 	python3 ./tools/ubxtool_safety_harness.py
@@ -172,7 +173,7 @@ apps-valgrind-check: $(PROGRAMS)
 	@set -e; \
 	for binaryfile in $(PROGRAMS); do \
 		echo "valgrind: $${binaryfile}"; \
-		valgrind --error-exitcode=1 --leak-check=full --errors-for-leak-kinds=all \
+		valgrind --show-leak-kinds=all -s --error-exitcode=1 --leak-check=full --errors-for-leak-kinds=all \
 			"./$${binaryfile}" --version >/dev/null; \
 	done
 
@@ -181,6 +182,9 @@ navparse-navdump-fixture-check: navmon.pb.cc navparse navdump
 
 rtcmtool-septool-fixture-check: navmon.pb.cc rtcmtool septool
 	python3 ./tools/rtcmtool_septool_fixture_harness.py
+
+rinreport-rinjoin-fixture-check: rinreport rinjoin
+	python3 ./tools/rinreport_rinjoin_fixture_harness.py
 
 coverage:
 	$(MAKE) clean
