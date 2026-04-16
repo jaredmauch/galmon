@@ -26,6 +26,7 @@ extern const char* g_gitHash;
 struct WinKeeper
 {
   WinKeeper();
+  ~WinKeeper();
   struct Window
   {
     WINDOW *header, *text;
@@ -87,6 +88,21 @@ WinKeeper::WinKeeper()
     scrollok(d_windows[n].text, 1);
   }
 };
+
+WinKeeper::~WinKeeper()
+{
+  for(auto& w : d_windows) {
+    if(w.header) {
+      delwin(w.header);
+      w.header = nullptr;
+    }
+    if(w.text) {
+      delwin(w.text);
+      w.text = nullptr;
+    }
+  }
+  endwin();
+}
 
 void WinKeeper::emitLine(int sv, std::string_view line)
 {

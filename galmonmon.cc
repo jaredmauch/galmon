@@ -1,10 +1,10 @@
 #include <optional>
 #include "minicurl.hh"
 #include <iostream>
+#include <nlohmann/json.hpp>
 #include "navmon.hh"
 #include "fmt/format.h"
 #include "fmt/printf.h"
-#include "ext/powerblog/h2o-pp.hh"
 #include <variant>
 
 #include "CLI/CLI.hpp"

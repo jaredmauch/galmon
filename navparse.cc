@@ -9,9 +9,16 @@
 #include <bitset>
 #include <vector>
 #include <thread>
+#include <atomic>
+#include <functional>
 #include <signal.h>
 #include <mutex>
-#include "ext/powerblog/h2o-pp.hh"
+#if __has_include(<httplib.h>)
+#include <httplib.h>
+#elif __has_include(<cpp-httplib/httplib.h>)
+#include <cpp-httplib/httplib.h>
+#endif
+#include <nlohmann/json.hpp>
 #include "minicurl.hh"
 #include <time.h>
 #include "ubx.hh"
@@ -448,14 +455,10 @@ std::string humanBhs(int bhs)
   return options.at(bhs);
 }
 
-void addHeaders(h2o_req_t* req)
+void addHeaders(httplib::Response& res)
 {
-  h2o_add_header(&req->pool, &req->res.headers, H2O_TOKEN_CACHE_CONTROL, 
-                     NULL, H2O_STRLIT("max-age=3"));
-  
-  // Access-Control-Allow-Origin
-  h2o_add_header(&req->pool, &req->res.headers, H2O_TOKEN_ACCESS_CONTROL_ALLOW_ORIGIN, 
-                 NULL, H2O_STRLIT("*"));
+  res.set_header("Cache-Control", "max-age=3");
+  res.set_header("Access-Control-Allow-Origin", "*");
 
 }
 
@@ -678,10 +681,22 @@ try
   InfluxPusher idb(influxDBName);
   MiniCurl::init();
   
-  H2OWebserver h2s("galmon");
+  httplib::Server h2s;
+  auto routePath = [](const httplib::Request& req) -> std::string_view {
+    return req.target.empty() ? req.path : req.target;
+  };
+  auto addJSONHandler = [&](const std::string& path, auto handler) {
+    auto wrapper = [&, handler](const httplib::Request& request, httplib::Response& response) {
+      addHeaders(response);
+      response.set_content(handler(request).dump(), "application/json");
+      response.status = 200;
+    };
+    h2s.Get(path, wrapper);
+    h2s.Post(path, wrapper);
+  };
   
-  h2s.addHandler("/global.json", [](auto handler, auto req) {
-      addHeaders(req);
+  addJSONHandler("/global.json", [&](const httplib::Request& request) {
+      (void)request;
       
       nlohmann::json ret = nlohmann::json::object();
       auto svstats = g_statskeeper.get();
@@ -747,8 +762,8 @@ try
       return ret;
     });
 
-  h2s.addHandler("/almanac.json", [](auto handler, auto req) {
-      addHeaders(req);
+  addJSONHandler("/almanac.json", [&](const httplib::Request& request) {
+      (void)request;
       
       auto beidoualma = g_beidoualmakeeper.get();
       auto svstats = g_statskeeper.get();
@@ -976,8 +991,8 @@ try
       return ret;
     });
 
-  h2s.addHandler("/observers.json", [](auto handler, auto req) {
-      addHeaders(req);
+  addJSONHandler("/observers.json", [&](const httplib::Request& request) {
+      (void)request;
       
       nlohmann::json ret = nlohmann::json::array();
       for(const auto& src : g_srcfacts) {
@@ -1072,9 +1087,8 @@ try
       return ret;
     });
 
-  h2s.addHandler("/sv.json", [](auto handler, auto req) {
-      addHeaders(req);
-      string_view path = convert(req->path);
+  addJSONHandler("/sv.json", [&](const httplib::Request& request) {
+      string_view path = routePath(request);
       nlohmann::json ret = nlohmann::json::object();
 
       SatID id;
@@ -1238,15 +1252,14 @@ try
     }
     );
 
-  h2s.addHandler("/cov.json", [](auto handler, auto req) {
-      addHeaders(req);
+  addJSONHandler("/cov.json", [&](const httplib::Request& request) {
       vector<Point> sats;
       auto galileoalma = g_galileoalmakeeper.get();
       auto gpsalma = g_gpsalmakeeper.get();
       auto beidoualma = g_beidoualmakeeper.get();
       auto svstats = g_statskeeper.get();
       //  cout<<"pseudoTow "<<pseudoTow<<endl;
-      string_view path = convert(req->path);
+      string_view path = routePath(request);
 
       bool doGalileo{true}, doGPS{false}, doBeidou{false}, doGlonass{false};
       auto pos = path.find("gps=");
@@ -1374,17 +1387,11 @@ try
       return ret;
     });
 
-  h2s.addHandler("/sbas.json", [](auto handler, auto req) {
-      addHeaders(req);
+  addJSONHandler("/sbas.json", [&](const httplib::Request& request) {
+      (void)request;
       auto svstats = g_statskeeper.get();
       auto sbas = g_sbaskeeper.get();
       nlohmann::json ret = nlohmann::json::object();
-      h2o_add_header(&req->pool, &req->res.headers, H2O_TOKEN_CACHE_CONTROL, 
-                     NULL, H2O_STRLIT("max-age=3"));
-
-      // Access-Control-Allow-Origin
-      h2o_add_header(&req->pool, &req->res.headers, H2O_TOKEN_ACCESS_CONTROL_ALLOW_ORIGIN, 
-                     NULL, H2O_STRLIT("*"));
 
       
       for(const auto& s: sbas) {
@@ -1413,16 +1420,10 @@ try
       return ret;
     });
   
-  h2s.addHandler("/svs.json", [](auto handler, auto req) {
-      addHeaders(req);
+  addJSONHandler("/svs.json", [&](const httplib::Request& request) {
+      (void)request;
       auto svstats = g_statskeeper.get();
       nlohmann::json ret = nlohmann::json::object();
-      h2o_add_header(&req->pool, &req->res.headers, H2O_TOKEN_CACHE_CONTROL, 
-                     NULL, H2O_STRLIT("max-age=3"));
-
-      // Access-Control-Allow-Origin
-      h2o_add_header(&req->pool, &req->res.headers, H2O_TOKEN_ACCESS_CONTROL_ALLOW_ORIGIN, 
-                     NULL, H2O_STRLIT("*"));
 
       
       for(const auto& s: svstats) {
@@ -1714,15 +1715,9 @@ try
       return ret;
     });
 
-  h2s.addHandler("/sbstatus.json", [](auto handler, auto req) {
-      addHeaders(req);
+  addJSONHandler("/sbstatus.json", [&](const httplib::Request& request) {
+      (void)request;
       auto svstats = g_statskeeper.get();
-      h2o_add_header(&req->pool, &req->res.headers, H2O_TOKEN_CACHE_CONTROL, 
-                     NULL, H2O_STRLIT("max-age=3"));
-
-      // Access-Control-Allow-Origin
-      h2o_add_header(&req->pool, &req->res.headers, H2O_TOKEN_ACCESS_CONTROL_ALLOW_ORIGIN, 
-                     NULL, H2O_STRLIT("*"));
 
       auto ret = nlohmann::json::array();
 
@@ -1804,17 +1799,48 @@ try
     });
 
   
-  h2s.addDirectory("/", htmlDir);
+  if(!h2s.set_mount_point("/", htmlDir)) {
+    throw std::runtime_error("Unable to serve directory " + htmlDir + " on path /");
+  }
 
-  const char *address = localAddress.c_str();
-  std::thread ws([&h2s, address]() {
-      auto actx = h2s.addContext();
-      ComboAddress listenOn(address);
-      h2s.addListener(listenOn, actx);
-      cout<<"Listening on "<< listenOn.toStringWithPort() <<endl;
-      h2s.runLoop();
+  ComboAddress listenOn(localAddress);
+  const auto listenHost = listenOn.toString();
+  const auto listenPort = ntohs(listenOn.sin4.sin_port);
+  std::atomic_bool stopWeb{false};
+  std::exception_ptr webException;
+  std::thread ws([&]() {
+      try {
+        cout<<"Listening on "<< listenOn.toStringWithPort() <<endl;
+        if(!h2s.listen(listenHost, listenPort)) {
+          throw std::runtime_error("Unable to listen on " + listenHost + ":" + std::to_string(listenPort));
+        }
+      }
+      catch(...) {
+        if(!stopWeb.load()) {
+          webException = std::current_exception();
+        }
+      }
     });
-  ws.detach();
+  auto shutdownWeb = [&]() {
+    stopWeb.store(true);
+    h2s.stop();
+    if(ws.joinable()) {
+      ws.join();
+    }
+    if(webException) {
+      std::rethrow_exception(webException);
+    }
+  };
+  struct ShutdownGuard
+  {
+    std::function<void()> fn;
+    ~ShutdownGuard()
+    {
+      if(fn) {
+        fn();
+      }
+    }
+  } shutdownGuard{shutdownWeb};
 
   try {
   for(;;) {
@@ -3143,6 +3169,8 @@ try
   }
   catch(EofException& e)
     {}
+  shutdownGuard.fn = nullptr;
+  shutdownWeb();
 }
 catch(std::exception& e)
 {
