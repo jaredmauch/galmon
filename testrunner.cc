@@ -3,6 +3,7 @@
 #include "ext/doctest.h"
 #include "ephemeris.hh"
 #include "glonass.hh"
+#include "gps.hh"
 #include "beidou.hh"
 #include "influxpush.hh"
 #include "navmon.hh"
@@ -499,6 +500,87 @@ TEST_CASE("beidou coordinate propagation returns finite position") {
 
   Point p;
   getCoordinates(200.0, bm, &p, true);
+  CHECK(std::isfinite(p.x));
+  CHECK(std::isfinite(p.y));
+  CHECK(std::isfinite(p.z));
+  CHECK((fabs(p.x) + fabs(p.y) + fabs(p.z)) > 1.0);
+}
+
+TEST_CASE("gps utc<->week/tow conversion round-trips for integer inputs") {
+  const int wn = 2000;
+  const int tow = 123456;
+
+  const time_t utc = (time_t)utcFromGPS(wn, (double)tow);
+  int wn2 = -1;
+  int tow2 = -1;
+  getGPSDateFromUTC(utc, wn2, tow2);
+
+  CHECK(wn2 == wn);
+  CHECK(tow2 == tow);
+}
+
+TEST_CASE("gps atomic offset is af0/af1 scaled when delta=0") {
+  GPSState eph{};
+  eph.t0c = 10; // getT0c(eph) = t0c * 16 = 160
+  const int tow = 160;
+
+  eph.af0 = 123.0;
+  eph.af1 = 456.0;
+  // af2 is only used when delta != 0; keep in int8_t range to avoid warnings.
+  eph.af2 = 2;
+
+  auto off = getGPSAtomicOffset(tow, eph);
+  const double factor = ldexp(1000000000.0, -31);
+
+  // delta=0 => cur=af0, trend=ldexp(af1,-12)
+  CHECK(std::abs(off.first - factor * eph.af0) < 1e-6);
+  CHECK(std::abs(off.second - factor * ldexp(eph.af1, -12)) < 1e-6);
+}
+
+TEST_CASE("gps UTC offset scales with a0/a1 when delta=0") {
+  GPSState eph{};
+  const int wn = 10;
+  eph.wn0t = 10;   // dw=0
+  eph.t0t = 1000;  // delta=tow - t0t
+
+  eph.a0 = 77;
+  eph.a1 = 88; // trend uses ldexp(a1, -20)
+
+  const int tow = 1000;
+  auto off = getGPSUTCOffset(tow, wn, eph);
+  const double factor = ldexp(1000000000.0, -30);
+
+  CHECK(std::abs(off.first - factor * (double)eph.a0) < 1e-6);
+  CHECK(std::abs(off.second - factor * ldexp((double)eph.a1, -20)) < 1e-6);
+}
+
+TEST_CASE("gps coordinate propagation returns finite position") {
+  GPSState eph{};
+  eph.t0e = 100000;
+  eph.deltan = 0;
+
+  // Use values that yield reasonable orbit parameters for finiteness testing.
+  eph.sqrtA = 2701000000u; // => ldexp(sqrtA,-19) ~ 5153
+  eph.e = 86000000u;       // => ldexp(e,-33) ~ 0.01
+
+  eph.m0 = 1;
+  eph.omega0 = 1;
+  eph.i0 = 1;
+  eph.omega = 1;
+  eph.idot = 0;
+  eph.omegadot = 0;
+
+  eph.cuc = 0;
+  eph.cus = 0;
+  eph.crc = 0;
+  eph.crs = 0;
+  eph.cic = 0;
+  eph.cis = 0;
+
+  Point p;
+  // Keep tow close to t0e to avoid extreme ages.
+  getCoordinates((double)eph.t0e + 60.0, eph, &p, true);
+
   CHECK(std::isfinite(p.x));
   CHECK(std::isfinite(p.y));
   CHECK(std::isfinite(p.z));
