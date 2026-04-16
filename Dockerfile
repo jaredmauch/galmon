@@ -12,8 +12,8 @@ ARG MAKE_FLAGS=-j2
 
 RUN sed -i "s%http://deb.debian.org/debian/%${APT_URL}%" /etc/apt/sources.list \
     && apt-get update && apt-get -y upgrade \
-    && apt-get install -y protobuf-compiler libh2o-dev libcurl4-openssl-dev \
-           libssl-dev libprotobuf-dev libh2o-evloop-dev libwslay-dev \
+    && apt-get install -y protobuf-compiler libcpp-httplib-dev libcurl4-openssl-dev \
+           libssl-dev libprotobuf-dev \
            libeigen3-dev libzstd-dev libfmt-dev libncurses-dev \
            make gcc g++ git build-essential curl autoconf automake help2man
 
@@ -28,7 +28,7 @@ RUN cd /galmon-src/ \
 #
 FROM debian:10-slim
 RUN apt-get update && apt-get -y upgrade \
-    && apt-get install -y libcurl4 libssl1.1 libprotobuf17 libh2o-evloop0.13 \
+    && apt-get install -y libcurl4 libssl1.1 libprotobuf17 libcpp-httplib-dev \
            libncurses6 \
     && apt-get -y clean \
     && rm -rf /var/lib/apt/lists/*
