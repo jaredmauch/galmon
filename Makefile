@@ -167,6 +167,15 @@ ubxtool-safety-valgrind-check: ubxtool
 apps-smoke-check: $(PROGRAMS)
 	python3 ./tools/apps_smoke_harness.py
 
+apps-valgrind-check: $(PROGRAMS)
+	@command -v valgrind >/dev/null 2>&1 || { echo "valgrind is required for apps-valgrind-check"; exit 1; }
+	@set -e; \
+	for binaryfile in $(PROGRAMS); do \
+		echo "valgrind: $${binaryfile}"; \
+		valgrind --error-exitcode=1 --leak-check=full --errors-for-leak-kinds=all \
+			"./$${binaryfile}" --version >/dev/null; \
+	done
+
 navparse-navdump-fixture-check: navmon.pb.cc navparse navdump
 	python3 ./tools/navparse_navdump_fixture_harness.py
 
