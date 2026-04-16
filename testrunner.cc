@@ -2,9 +2,13 @@
 
 #include "ext/doctest.h"
 #include "ephemeris.hh"
+#include "glonass.hh"
+#include "beidou.hh"
+#include "influxpush.hh"
 #include "navmon.hh"
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <httplib.h>
 #include <nlohmann/json.hpp>
 #include <thread>
@@ -312,4 +316,191 @@ TEST_CASE("httplib detailed checks for navparse-style URL codepaths") {
 
   server.stop();
   serverThread.join();
+}
+
+TEST_CASE("influx pusher formats line protocol and deduplicates") {
+  InfluxPusher idb("testdb");
+  idb.d_lastsent = time(0);
+
+  SatID id{2, 12, 5};
+  idb.addValue(id, "clock", {{"offset_ns", 12.5}, {"jump", int32_t(3)}, {"note", string("ok")}}, 1234.5, 7);
+
+  REQUIRE(idb.d_buffer.size() == 1);
+  const auto line = *idb.d_buffer.begin();
+  CHECK(line.find("clock,sv=12,gnssid=2,sigid=5,src=7 ") == 0);
+  CHECK(line.find("offset_ns=12.500000") != string::npos);
+  CHECK(line.find("jump=3i") != string::npos);
+  CHECK(line.find("note=\"ok\"") != string::npos);
+  CHECK(line.find(" 1234500000000\n") != string::npos);
+
+  idb.addValue(id, "clock", {{"offset_ns", 12.5}, {"jump", int32_t(3)}, {"note", string("ok")}}, 1234.5, 7);
+  CHECK(idb.d_buffer.size() == 1);
+  CHECK(idb.d_numdedupmsmts == 1);
+
+  // Avoid network in destructor.
+  idb.d_dbname = "null";
+}
+
+TEST_CASE("influx pusher rejects invalid values and supports mute mode") {
+  InfluxPusher active("testdb");
+  active.d_lastsent = time(0);
+  SatID id{0, 1, 0};
+
+  active.addValue(id, "clock", {{"offset_ns", std::numeric_limits<double>::quiet_NaN()}}, 1.0);
+  CHECK(active.d_buffer.empty());
+
+  active.addValue(id, "clock", {{"offset_ns", 1.0}}, -1.0);
+  CHECK(active.d_buffer.empty());
+
+  active.addValueObserver(9, "fix", {{"acc", 1.0}}, 2200000001.0);
+  CHECK(active.d_buffer.empty());
+
+  InfluxPusher muted("null");
+  muted.d_lastsent = time(0);
+  muted.addValue(id, "clock", {{"offset_ns", 1.0}}, 2.0);
+  muted.addValueObserver(9, "fix", {{"acc", 1.0}}, 2.0);
+  CHECK(muted.d_buffer.empty());
+
+  active.d_dbname = "null";
+}
+
+TEST_CASE("glonass Tb maps to UTC quarter-hour slots") {
+  struct tm tm{};
+  tm.tm_year = 2026 - 1900;
+  tm.tm_mon = 3;
+  tm.tm_mday = 16;
+  tm.tm_hour = 10;
+  tm.tm_min = 0;
+  tm.tm_sec = 0;
+  const time_t reference = timegm(&tm);
+
+  const auto mk = [](int y, int mon, int d, int h, int m, int s) {
+    struct tm t{};
+    t.tm_year = y - 1900;
+    t.tm_mon = mon - 1;
+    t.tm_mday = d;
+    t.tm_hour = h;
+    t.tm_min = m;
+    t.tm_sec = s;
+    return timegm(&t);
+  };
+
+  CHECK(getGlonassT0e(reference, 0) == mk(2026, 4, 15, 21, 0, 0));
+  CHECK(getGlonassT0e(reference, 4) == mk(2026, 4, 15, 22, 0, 0));
+  CHECK(getGlonassT0e(reference, 95) == mk(2026, 4, 16, 20, 45, 0));
+}
+
+TEST_CASE("glonass epoch time increases consistently") {
+  GlonassMessage gm{};
+  gm.n4 = 8;
+  gm.NT = 100;
+  gm.hour = 12;
+  gm.minute = 34;
+  gm.seconds = 30;
+  const auto base = gm.getGloTime();
+
+  gm.seconds = 31;
+  CHECK(gm.getGloTime() == base + 1);
+  gm.seconds = 30;
+  gm.minute = 35;
+  CHECK(gm.getGloTime() == base + 60);
+  gm.minute = 34;
+  gm.NT = 101;
+  CHECK(gm.getGloTime() == base + 86400);
+}
+
+TEST_CASE("glonass coordinate propagation returns finite position") {
+  GlonassMessage gm{};
+  gm.n4 = 8;
+  gm.NT = 120;
+  gm.hour = 6;
+  gm.minute = 0;
+  gm.seconds = 0;
+  gm.Tb = 24;
+  gm.x = 32000000;
+  gm.y = -21000000;
+  gm.z = 18000000;
+  gm.dx = 1200;
+  gm.dy = -900;
+  gm.dz = 700;
+  gm.ddx = 0;
+  gm.ddy = 0;
+  gm.ddz = 0;
+
+  const uint32_t glotime = gm.getGloTime();
+  const uint32_t gloT0e = getGlonassT0e(glotime + 820368000, gm.Tb);
+  const uint32_t ephtow = (gloT0e - 820368000) % (7 * 86400);
+
+  Point p;
+  getCoordinates(ephtow + 60, gm, &p);
+  CHECK(std::isfinite(p.x));
+  CHECK(std::isfinite(p.y));
+  CHECK(std::isfinite(p.z));
+  CHECK((fabs(p.x) + fabs(p.y) + fabs(p.z)) > 1.0);
+}
+
+TEST_CASE("beidou getT0e scaling uses 8*(MSB<<15 + LSB)") {
+  BeidouMessage bm{};
+  bm.t0eMSB = 3;
+  bm.t0eLSB = 17;
+  CHECK(bm.getT0e() == 8 * ((3u << 15) + 17u));
+}
+
+TEST_CASE("beidou atomic offset is zero trend when a1=a2=0 and Sow==T0c") {
+  BeidouMessage bm{};
+  // Ensure ephAge(Sow, getT0c()) == 0 so delta terms vanish.
+  bm.t0c = 1;          // getT0c() == 8
+  bm.sow = 8;
+  bm.a0 = 123456;
+  bm.a1 = 0;
+  bm.a2 = 0;
+
+  auto off = bm.getAtomicOffset();
+  const double factor = ldexp(1000000000.0, -33);
+  CHECK(std::abs(off.first - factor * 123456.0) < 1e-6);
+  CHECK(std::abs(off.second) < 1e-12);
+}
+
+TEST_CASE("beidou UTC offset scales with a0utc and a1utc") {
+  BeidouMessage bm{};
+  bm.a0utc = 10; // in units of 2^-30 seconds before multiplying by factor
+  bm.a1utc = 0;
+
+  auto off = bm.getUTCOffset(12345);
+  const double factor = ldexp(1000000000.0, -30);
+  CHECK(std::abs(off.first - factor * 10.0) < 1e-6);
+  CHECK(std::abs(off.second) < 1e-12);
+}
+
+TEST_CASE("beidou coordinate propagation returns finite position") {
+  BeidouMessage bm{};
+
+  // Minimal synthetic ephemeris values. The goal is to verify that the
+  // propagation math produces finite coordinates (not to validate ICD accuracy).
+  bm.sqrtA = 2701000000u; // ~5153 after ldexp(-19)
+  bm.e = 86000000u;      // ~0.01 after ldexp(-33)
+  bm.deltan = 0;
+  bm.t0eMSB = 0;
+  bm.t0eLSB = 1;          // t0e == 8 seconds
+
+  bm.m0 = 1;
+  bm.omega = 0;
+  bm.omegadot = 0;
+  bm.Omega0 = 0;
+  bm.idot = 0;
+  bm.i0 = 1;              // tiny inclination is fine for finiteness testing
+
+  bm.cuc = 0;
+  bm.cus = 0;
+  bm.crc = 0;
+  bm.crs = 0;
+  bm.cic = 0;
+  bm.cis = 0;
+
+  Point p;
+  getCoordinates(200.0, bm, &p, true);
+  CHECK(std::isfinite(p.x));
+  CHECK(std::isfinite(p.y));
+  CHECK(std::isfinite(p.z));
+  CHECK((fabs(p.x) + fabs(p.y) + fabs(p.z)) > 1.0);
 }
