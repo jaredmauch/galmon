@@ -1777,8 +1777,18 @@ int main(int argc, char** argv)
       else if(msg.getClass() == 1 && msg.getType() == 0x35) { // UBX-NAV-SAT
         if(version9) // we have UBX-NAV-SIG
           continue;
+        if(payload.size() < 8) {
+          if (doDEBUG) { cerr<<humanTimeNow()<<" UBX-NAV-SAT payload too short: "<<payload.size()<<endl; }
+          continue;
+        }
         //        if (doDEBUG) { cerr<<humanTimeNow()<<" Info for "<<(int) payload[5]<<" svs: \n"; }
         for(unsigned int n = 0 ; n < payload[5]; ++n) {
+          size_t base = 8 + 12*n;
+          if(base + 12 > payload.size()) {
+            if (doDEBUG) { cerr<<humanTimeNow()<<" UBX-NAV-SAT entry "<<n<<" truncated, payload size "<<payload.size()<<endl; }
+            break;
+          }
+
           int gnssid = payload[8+12*n];
           int sv = payload[9+12*n];
 
@@ -1797,7 +1807,9 @@ int main(int argc, char** argv)
           nmm.mutable_rd()->set_db(db);
           nmm.mutable_rd()->set_el(el);
           nmm.mutable_rd()->set_azi(azi);
-          nmm.mutable_rd()->set_prres(*((int16_t*)(&payload[0] + 14 +12*n)) *0.1);
+          int16_t prres;
+          memcpy(&prres, &payload[14+12*n], sizeof(prres));
+          nmm.mutable_rd()->set_prres(prres *0.1);
 
           uint32_t status;
           memcpy(&status, &payload[16+12*n], 4);
@@ -1823,7 +1835,17 @@ int main(int argc, char** argv)
         }
       }
       else if(msg.getClass() == 1 && msg.getType() == 0x43) { // UBX-NAV-SIG
+        if(payload.size() < 8) {
+          if (doDEBUG) { cerr<<humanTimeNow()<<" UBX-NAV-SIG payload too short: "<<payload.size()<<endl; }
+          continue;
+        }
         for(unsigned int n = 0 ; n < payload[5]; ++n) {
+          size_t base = 8 + 16*n;
+          if(base + 16 > payload.size()) {
+            if (doDEBUG) { cerr<<humanTimeNow()<<" UBX-NAV-SIG entry "<<n<<" truncated, payload size "<<payload.size()<<endl; }
+            break;
+          }
+
           int gnssid = payload[8+16*n];
           int sv = payload[9+16*n];
           int qi = payload[15+16*n];
@@ -1862,7 +1884,9 @@ int main(int argc, char** argv)
           nmm.mutable_rd()->set_gnssid(gnssid);
           nmm.mutable_rd()->set_gnsssv(sv);
           nmm.mutable_rd()->set_db(db);
-          nmm.mutable_rd()->set_prres(*((int16_t*)(&payload[0] + 12 +16*n)) *0.1); // ENDIANISM
+          int16_t prres;
+          memcpy(&prres, &payload[12+16*n], sizeof(prres));
+          nmm.mutable_rd()->set_prres(prres *0.1); // ENDIANISM
           nmm.mutable_rd()->set_sigid(sigid);
           nmm.mutable_rd()->set_el(0);
           nmm.mutable_rd()->set_azi(0);
