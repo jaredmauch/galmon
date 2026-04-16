@@ -13,10 +13,12 @@
 #include <thread>
 #include <signal.h>
 #include <time.h>
+#include <cstdlib>
 #include "ubx.hh"
 #include "bits.hh"
 #include "minivec.hh"
 #include "navmon.pb.h"
+#include <google/protobuf/stubs/common.h>
 #include "ephemeris.hh"
 #include "gps.hh"
 #include "glonass.hh"
@@ -238,6 +240,7 @@ int main(int argc, char** argv)
 try
 {
   GOOGLE_PROTOBUF_VERIFY_VERSION;
+  std::atexit(google::protobuf::ShutdownProtobufLibrary);
 
   CLI::App app(program);
 

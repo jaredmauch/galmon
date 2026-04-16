@@ -9,8 +9,10 @@
 #include <bitset>
 #include <curses.h>
 #include <vector>
+#include <cstdlib>
 #include "galileo.hh"
 #include "navmon.pb.h"
+#include <google/protobuf/stubs/common.h>
 #include <unistd.h>
 #include "navmon.hh" 
 
@@ -161,6 +163,8 @@ void WinKeeper::setStatus(int sv, std::string_view line)
 
 int main(int argc, char** argv)
 {
+  std::atexit(google::protobuf::ShutdownProtobufLibrary);
+  GOOGLE_PROTOBUF_VERIFY_VERSION;
   bool doVERSION{false};
 
   CLI::App app(program);

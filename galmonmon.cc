@@ -6,8 +6,10 @@
 #include "fmt/format.h"
 #include "fmt/printf.h"
 #include <variant>
+#include <cstdlib>
 
 #include "CLI/CLI.hpp"
+#include <google/protobuf/stubs/common.h>
 #include "version.hh"
 
 static char program[]="galmonmon";
@@ -178,6 +180,7 @@ void sendTweet(const string& tweet)
 
 int main(int argc, char **argv)
 {
+  std::atexit(google::protobuf::ShutdownProtobufLibrary);
   MiniCurl mc;
   MiniCurl::MiniCurlHeaders mch;
   string url="https://galmon.eu/";

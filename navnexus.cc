@@ -10,11 +10,13 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <cstdlib>
 #include <stdexcept>
 #include <sys/types.h>
 #include "storage.hh"
 #include <dirent.h>
 #include <inttypes.h>
+#include <google/protobuf/stubs/common.h>
 
 #include "CLI/CLI.hpp"
 #include "version.hh"
@@ -156,6 +158,7 @@ void sendListener(Socket&& s, ComboAddress local, int hours)
 
 int main(int argc, char** argv)
 {
+  std::atexit(google::protobuf::ShutdownProtobufLibrary);
   bool doVERSION{false};
 
   CLI::App app(program);

@@ -15,6 +15,7 @@
 #include <random>
 #include <stdint.h>
 #include <vector>
+#include <cstdlib>
 #include "ubx.hh"
 #include "navmon.hh"
 #include <iostream>
@@ -26,6 +27,7 @@
 #include "galileo.hh"
 #include <arpa/inet.h>
 #include "navmon.pb.h"
+#include <google/protobuf/stubs/common.h>
 #include "gps.hh"
 #include "glonass.hh"
 #include "beidou.hh"
@@ -506,6 +508,7 @@ int main(int argc, char** argv)
 {
   auto starttime = std::chrono::steady_clock::now();
   GOOGLE_PROTOBUF_VERIFY_VERSION;
+  std::atexit(google::protobuf::ShutdownProtobufLibrary);
 
   CLI::App app(program);
     

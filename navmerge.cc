@@ -7,6 +7,8 @@
 #include <signal.h>
 #include "fmt/format.h"
 #include "fmt/printf.h"
+#include <cstdlib>
+#include <google/protobuf/stubs/common.h>
 #include "nmmsender.hh"
 #include "CLI/CLI.hpp"
 #include "version.hh"
@@ -192,6 +194,7 @@ static void cleanFilter()
 int main(int argc, char** argv)
 {
   GOOGLE_PROTOBUF_VERIFY_VERSION;
+  std::atexit(google::protobuf::ShutdownProtobufLibrary);
   vector<string> destinations;
   vector<string> sources;
   vector<string> listeners;

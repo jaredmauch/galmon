@@ -13,6 +13,7 @@
 #include <functional>
 #include <signal.h>
 #include <mutex>
+#include <cstdlib>
 #if __has_include(<httplib.h>)
 #include <httplib.h>
 #elif __has_include(<cpp-httplib/httplib.h>)
@@ -25,6 +26,7 @@
 #include "bits.hh"
 #include "minivec.hh"
 #include "navmon.pb.h"
+#include <google/protobuf/stubs/common.h>
 #include "ephemeris.hh"
 #include "gps.hh"
 #include "glonass.hh"
@@ -640,6 +642,7 @@ catch(std::exception&e) {
 int main(int argc, char** argv)
 try
 {
+  std::atexit(google::protobuf::ShutdownProtobufLibrary);
   bool doVERSION{false};
 
   CLI::App app(program);

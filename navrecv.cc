@@ -11,11 +11,13 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <cstdlib>
 #include "zstdwrap.hh"
 #include "CLI/CLI.hpp"
 #include "version.hh"
 #include <netinet/tcp.h>
 #include "navmon.hh"
+#include <google/protobuf/stubs/common.h>
 #include <mutex>
 
 static char program[]="navrecv";
@@ -346,6 +348,7 @@ void recvListener(Socket&& s, ComboAddress local)
 
 int main(int argc, char** argv)
 {
+  std::atexit(google::protobuf::ShutdownProtobufLibrary);
   bool doVERSION{false};
 
   CLI::App app(program);
