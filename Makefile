@@ -156,6 +156,7 @@ check: testrunner ubxtool
 	./testrunner
 	python3 ./tools/ubxtool_safety_harness.py --iterations 10
 	python3 ./tools/navparse_navdump_fixture_harness.py
+	python3 ./tools/rtcmtool_septool_fixture_harness.py
 
 ubxtool-safety-check: ubxtool
 	python3 ./tools/ubxtool_safety_harness.py
@@ -168,6 +169,9 @@ apps-smoke-check: $(PROGRAMS)
 
 navparse-navdump-fixture-check: navmon.pb.cc navparse navdump
 	python3 ./tools/navparse_navdump_fixture_harness.py
+
+rtcmtool-septool-fixture-check: navmon.pb.cc rtcmtool septool
+	python3 ./tools/rtcmtool_septool_fixture_harness.py
 
 coverage:
 	$(MAKE) clean
