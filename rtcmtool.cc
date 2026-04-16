@@ -115,6 +115,12 @@ int main(int argc, char** argv)
 {
   //  time_t starttime=time(0);
   GOOGLE_PROTOBUF_VERIFY_VERSION;
+  for(int n = 1; n < argc; ++n) {
+    if(!strcmp(argv[n], "--version")) {
+      showVersion(program, g_gitHash);
+      return 0;
+    }
+  }
   vector<string> destinations;
 
   bool doVERSION{false}, doSTDOUT{false};
