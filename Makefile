@@ -159,6 +159,14 @@ check: testrunner ubxtool
 	python3 ./tools/rtcmtool_septool_fixture_harness.py
 	python3 ./tools/rinreport_rinjoin_fixture_harness.py
 
+check-valgrind: testrunner ubxtool navparse navdump rtcmtool septool rinreport rinjoin
+	@command -v valgrind >/dev/null 2>&1 || { echo "valgrind is required for check-valgrind"; exit 1; }
+	valgrind --quiet --leak-check=full --show-leak-kinds=all --errors-for-leak-kinds=definite,possible,indirect --error-exitcode=99 ./testrunner
+	python3 ./tools/ubxtool_safety_harness.py --iterations 10 --valgrind
+	python3 ./tools/navparse_navdump_fixture_harness.py --valgrind
+	python3 ./tools/rtcmtool_septool_fixture_harness.py --valgrind
+	python3 ./tools/rinreport_rinjoin_fixture_harness.py --valgrind
+
 ubxtool-safety-check: ubxtool
 	python3 ./tools/ubxtool_safety_harness.py
 
@@ -170,12 +178,7 @@ apps-smoke-check: $(PROGRAMS)
 
 apps-valgrind-check: $(PROGRAMS)
 	@command -v valgrind >/dev/null 2>&1 || { echo "valgrind is required for apps-valgrind-check"; exit 1; }
-	@set -e; \
-	for binaryfile in $(PROGRAMS); do \
-		echo "valgrind: $${binaryfile}"; \
-		valgrind --show-leak-kinds=all -s --error-exitcode=1 --leak-check=full --errors-for-leak-kinds=all \
-			"./$${binaryfile}" --version >/dev/null; \
-	done
+	python3 ./tools/apps_smoke_harness.py --valgrind
 
 navparse-navdump-fixture-check: navmon.pb.cc navparse navdump
 	python3 ./tools/navparse_navdump_fixture_harness.py
