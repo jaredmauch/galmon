@@ -266,14 +266,14 @@ DF 385: Full seconds since the beginning of the GPS week
   }
   else if(type == 1059 || type == 1242) { // GPS/Galileo bias
     int off = 0;
-    int msgnum = gbum(off, 12);
+    // int msgnum = gbum(off, 12);
 
-    int gpstime = gbum(off, 20);
-    int uinterval = gbum(off, 4);
-    int mmi = gbum(off, 1);
-    int iodssr = gbum(off, 4);
-    int ssrprov = gbum(off, 16);
-    int ssrsol = gbum(off, 4);
+    // int gpstime = gbum(off, 20);
+    // int uinterval = gbum(off, 4);
+    // int mmi = gbum(off, 1);
+    // int iodssr = gbum(off, 4);
+    // int ssrprov = gbum(off, 16);
+    // int ssrsol = gbum(off, 4);
     int numsats = gbum(off, 6);
 
     //    cout <<"msgnum "<<msgnum<<" gpstime " << gpstime<<" numsats "<< numsats<<endl;

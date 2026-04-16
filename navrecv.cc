@@ -210,9 +210,9 @@ struct ClientKeeper
     string format("{:<50}{:<5}{:<10}{:<10}{:<10}\n");
     ofstream out("clients.bak");
     time_t now=time(0);
-    out<< fmt::format(format, "IP Address", "ID", "Protocol", "Messages", "Age");
+    out<< fmt::format(fmt::runtime(format), "IP Address", "ID", "Protocol", "Messages", "Age");
     for(const auto& c : d_clients) {
-      out << fmt::format(format, c.first.toStringWithPort(), c.second.station, c.second.oldProtocol ? "Old" : "New", c.second.messages, now-c.second.lastMessage);
+      out << fmt::format(fmt::runtime(format), c.first.toStringWithPort(), c.second.station, c.second.oldProtocol ? "Old" : "New", c.second.messages, now-c.second.lastMessage);
     }
     out.close();
     unlink("clients.txt");

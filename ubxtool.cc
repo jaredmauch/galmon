@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <random>
 #include <stdint.h>
+#include <vector>
 #include "ubx.hh"
 #include "navmon.hh"
 #include <iostream>
@@ -201,10 +202,10 @@ std::pair<UBXMessage, struct timeval> getUBXMessage(int fd, double* timeout)
 
       uint16_t len = b[2] + 256*b[3];
       //      if (doDEBUG) { cerr<<humanTimeNow()<<" Got class "<<(int)msg[2]<<" type "<<(int)msg[3]<<", len = "<<len<<endl; }
-      uint8_t buffer[len+2];
-      res=readn2Timeout(fd, buffer, len+2, timeout);
+      std::vector<uint8_t> buffer(len+2);
+      res=readn2Timeout(fd, buffer.data(), len+2, timeout);
 
-      for(auto ptr = buffer ; ptr < buffer+len+2; ++ptr)
+      for(auto ptr = buffer.data() ; ptr < buffer.data()+len+2; ++ptr)
 	msg.push_back(*ptr); // checksum
       if (doLOGFILE) {
         if(!g_fromFile)

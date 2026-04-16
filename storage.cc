@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <arpa/inet.h>
 #include <iostream>
+#include <vector>
 using namespace std;
 
 
@@ -51,11 +52,11 @@ bool getNMM(int fd, NavMonMessage& nmm, uint32_t& offset)
   if(read(fd, &len, 2) != 2)
     return false;
   len = htons(len);
-  char buffer[len];
-  if(read(fd, buffer, len) != len)
+  vector<char> buffer(len);
+  if(read(fd, buffer.data(), len) != len)
     return false;
     
-  nmm.ParseFromString(string(buffer, len));
+  nmm.ParseFromString(string(buffer.data(), len));
   offset += 4 + 2 + len;
   return true;
 }
@@ -71,11 +72,11 @@ bool getNMM(FILE* fp, NavMonMessage& nmm, uint32_t& offset)
   if(fread(&len, 1, 2, fp) != 2)
     return false;
   len = htons(len);
-  char buffer[len];
-  if(fread(buffer, 1, len, fp) != len)
+  vector<char> buffer(len);
+  if(fread(buffer.data(), 1, len, fp) != len)
     return false;
     
-  nmm.ParseFromString(string(buffer, len));
+  nmm.ParseFromString(string(buffer.data(), len));
   offset += 4 + 2 + len;
   return true;
 }
@@ -109,12 +110,12 @@ bool getRawNMM(int fd, timespec& t, string& raw, uint32_t& offset)
   if(read(fd, &len, 2) != 2)
     return false;
   len = htons(len);
-  char buffer[len];
-  if(read(fd, buffer, len) != len)
+  vector<char> buffer(len);
+  if(read(fd, buffer.data(), len) != len)
     return false;
 
   NavMonMessage nmm;
-  raw.assign(buffer, len);
+  raw.assign(buffer.data(), len);
   nmm.ParseFromString(raw);
   t.tv_sec = nmm.localutcseconds();
   t.tv_nsec = nmm.localutcnanoseconds();
@@ -153,11 +154,11 @@ bool getRawNMM(FILE* fp, timespec& t, string& raw, uint32_t& offset)
   if(fread(&len, 1, 2, fp) != 2)
     return false;
   len = htons(len);
-  char buffer[len];
-  if(fread(buffer, 1, len, fp) != len)
+  vector<char> buffer(len);
+  if(fread(buffer.data(), 1, len, fp) != len)
     return false;
   NavMonMessage nmm;
-  raw.assign(buffer, len);
+  raw.assign(buffer.data(), len);
   nmm.ParseFromString(raw);
   t.tv_sec = nmm.localutcseconds();
   t.tv_nsec = nmm.localutcnanoseconds();

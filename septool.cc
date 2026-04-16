@@ -17,6 +17,7 @@
 #include "fmt/os.h"
 #include "fmt/printf.h"
 #include "gps.hh"
+#include <vector>
 using namespace std;
 
 
@@ -111,8 +112,8 @@ std::pair<SEPMessage, struct timeval> getSEPMessage(int fd, double* timeout)
       //      cerr<<"Got message of type "<<getbitu((uint8_t*)&blkid, 0, 12)<<", revision "<<
       //        getbitu((uint8_t*)&blkid, 12, 4)<<" ("<<ntohs(blkid)<<"), len= "<<len<<endl;
       
-      uint8_t buffer[len-8];
-      res=readn2Timeout(fd, buffer, len-8, timeout);
+      std::vector<uint8_t> buffer(len-8);
+      res=readn2Timeout(fd, buffer.data(), len-8, timeout);
       for(int n=0; n < len-8; ++n)
 	msg.push_back(buffer[n]);
       return make_pair(SEPMessage(msg), tv);
@@ -207,8 +208,12 @@ try
         uint8_t rxChannel;
         uint8_t navBits[32];
       } __attribute__((packed));
-      SEPInav si;
-      memcpy(&si, &str[0], sizeof(si));
+      SEPInav si{};
+      if(str.size() < sizeof(si)) {
+        cerr<<"Short SEPInav payload, skipping"<<endl;
+        continue;
+      }
+      memcpy(&si, str.data(), sizeof(si));
       //      cerr<<"tow "<<si.towMsec /1000<<" wn "<<si.wn <<" sv " << (int) si.sv - 70<<" ";
       int sigid = si.src & 31;
       int pbsigid=sepsig2ubx(sigid);
@@ -315,8 +320,12 @@ by the decoding software.
         int8_t deltals;
         uint8_t synclevel;
       } __attribute__((packed));
-      TimeMsg tmsg;
-      memcpy(&tmsg, &str[0], sizeof(tmsg));
+      TimeMsg tmsg{};
+      if(str.size() < sizeof(tmsg)) {
+        cerr<<"Short TimeMsg payload, skipping"<<endl;
+        continue;
+      }
+      memcpy(&tmsg, str.data(), sizeof(tmsg));
       if(!quiet)
         cerr<< fmt::sprintf("UTC Time: %04d%02d%02d %02d:%02d:%02d\n",
                           2000+tmsg.utcyear,
@@ -344,8 +353,12 @@ by the decoding software.
         uint8_t rxChannel;
         uint8_t navBits[40];
       } __attribute__((packed));
-      GPSCA ga;
-      memcpy(&ga, &str[0], sizeof(ga));
+      GPSCA ga{};
+      if(str.size() < sizeof(ga)) {
+        cerr<<"Short GPSCA payload, skipping"<<endl;
+        continue;
+      }
+      memcpy(&ga, str.data(), sizeof(ga));
       int sigid = ga.src & 31;
       //      cerr<<"tow "<<sf.towMsec /1000<<" wn "<<sf.wn <<" sv " << (int) sf.sv - 70<<" sigid " << sigid <<" ";
       if(!ga.crcPassed) {
@@ -416,8 +429,12 @@ by the decoding software.
         uint8_t rxChannel;
         uint8_t navBits[32];
       } __attribute__((packed));
-      SEPFnav sf;
-      memcpy(&sf, &str[0], sizeof(sf));
+      SEPFnav sf{};
+      if(str.size() < sizeof(sf)) {
+        cerr<<"Short SEPFnav payload, skipping"<<endl;
+        continue;
+      }
+      memcpy(&sf, str.data(), sizeof(sf));
       int sigid = sf.src & 31;
       //      cerr<<"tow "<<sf.towMsec /1000<<" wn "<<sf.wn <<" sv " << (int) sf.sv - 70<<" sigid " << sigid <<" ";
       if(!sf.crcPassed) {

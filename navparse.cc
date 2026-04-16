@@ -1839,14 +1839,14 @@ try
     uint16_t len;
     memcpy(&len, bert+4, 2);
     len = htons(len);
-    char buffer[len];
-    if(fread(buffer, 1, len, stdin) != len)
+    std::vector<char> buffer(len);
+    if(fread(buffer.data(), 1, len, stdin) != len)
       break;
 
     
     NavMonMessage nmm;
     try {
-      if(!nmm.ParseFromString(string(buffer, len))) {
+      if(!nmm.ParseFromString(string(buffer.data(), len))) {
         cerr<<"Parsing error nmm"<<endl;
         continue;
       }

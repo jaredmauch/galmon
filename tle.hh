@@ -3,6 +3,7 @@
 #include <map>
 #include <memory>
 #include <ctime>
+#include <tuple>
 class SGP4;
 class Tle;
 

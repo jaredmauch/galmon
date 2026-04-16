@@ -174,15 +174,16 @@ int main(int argc, char** argv)
     if(readn2(0, &len, 2) != 2)
       break;
     len = htons(len);
-    char buffer[len];
-    if(readn2(0, buffer, len) != len)
+    std::vector<char> buffer(len);
+    if(readn2(0, buffer.data(), len) != len)
       break;
     
     NavMonMessage nmm;
-    nmm.ParseFromString(string(buffer, len));
+    nmm.ParseFromString(string(buffer.data(), len));
     int sv = nmm.gi().gnsssv();
     time_t now = time(0);
-    if(nmm.localutcseconds() < now - 300)
+    const uint64_t staleCutoff = now > 300 ? static_cast<uint64_t>(now - 300) : 0;
+    if(nmm.localutcseconds() < staleCutoff)
       continue;
     if(nmm.type() == NavMonMessage::GalileoInavType) {
       static map<int, GalileoMessage> gms;

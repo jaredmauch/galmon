@@ -357,12 +357,12 @@ try
     if(readn2(0, &len, 2) != 2)
       break;
     len = htons(len);
-    char buffer[len];
-    if(readn2(0, buffer, len) != len)
+    std::vector<char> buffer(len);
+    if(readn2(0, buffer.data(), len) != len)
       break;
     
     NavMonMessage nmm;
-    nmm.ParseFromString(string(buffer, len));
+    nmm.ParseFromString(string(buffer.data(), len));
 
     if(!statset.empty() && !statset.count(nmm.sourceid()))
       continue;
