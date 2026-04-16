@@ -11,8 +11,11 @@
 #include <future>
 #include "ephemeris.hh"
 #include <set>
+#include "CLI/CLI.hpp"
+#include "version.hh"
 
 using namespace std;
+extern const char* g_gitHash;
 
 struct svstat
 {
@@ -85,7 +88,34 @@ auto worker(HanderOuter<string>* ho)
 
 int main(int argc, char** argv)
 {
-  ifstream filefile(argv[1]);
+  string program("rinreport");
+  CLI::App app(program);
+  string inputList;
+  bool doVERSION{false};
+  app.add_flag("--version", doVERSION, "show program version and copyright");
+  app.add_option("input", inputList, "Input file containing RINEX paths");
+
+  try {
+    app.parse(argc, argv);
+  }
+  catch(const CLI::Error &e) {
+    return app.exit(e);
+  }
+
+  if(doVERSION) {
+    showVersion(program.c_str(), g_gitHash);
+    return 0;
+  }
+  if(inputList.empty()) {
+    cerr<<"Need an input file containing RINEX paths\n";
+    return 1;
+  }
+
+  ifstream filefile(inputList);
+  if(!filefile) {
+    cerr<<"Unable to open input file list '"<<inputList<<"'\n";
+    return 1;
+  }
   string fname;
   deque<string> files;
   while(getline(filefile, fname))
@@ -147,10 +177,15 @@ int main(int argc, char** argv)
     cout<< fmt::sprintf("%.2f%% unhealthy (%d)\n", 100.0*health/sv.second.size(), health);
   }
   cout<<"All slots: ";
-  cout<< fmt::sprintf("%.2f%% NAPA (%d), ", 100.0*totnapa/tothours, totnapa);
-  cout<< fmt::sprintf("%.2f%% stale (%d), ", 100.0*totstale/tothours, totstale);
-  cout<< fmt::sprintf("%.2f%% unhealthy (%d), ", 100.0*tothealth/tothours, tothealth);
-  cout<< fmt::sprintf("%.2f%% issue (%d)\n", 100.0*totissue/tothours, totissue);
+  if(tothours) {
+    cout<< fmt::sprintf("%.2f%% NAPA (%d), ", 100.0*totnapa/tothours, totnapa);
+    cout<< fmt::sprintf("%.2f%% stale (%d), ", 100.0*totstale/tothours, totstale);
+    cout<< fmt::sprintf("%.2f%% unhealthy (%d), ", 100.0*tothealth/tothours, tothealth);
+    cout<< fmt::sprintf("%.2f%% issue (%d)\n", 100.0*totissue/tothours, totissue);
+  }
+  else {
+    cout<<"0.00% NAPA (0), 0.00% stale (0), 0.00% unhealthy (0), 0.00% issue (0)\n";
+  }
 
   int misnum=0;
   for(const auto& sv : stat) {
@@ -166,6 +201,8 @@ int main(int argc, char** argv)
     }
     cout<<endl;
   }
-  cout<<"Missing "<<misnum<<" SV-hours of data, or "<< misnum*100/(stat.size()*hours.size())<<"%\n";
+  auto totalSVHours = stat.size() * hours.size();
+  int missingPct = totalSVHours ? misnum*100/totalSVHours : 0;
+  cout<<"Missing "<<misnum<<" SV-hours of data, or "<< missingPct<<"%\n";
   
 }
