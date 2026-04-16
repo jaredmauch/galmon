@@ -51,12 +51,17 @@ clean:
 
 help2man:
 	$(INSTALL) -m 755 -d $(DESTDIR)$(prefix)/share/man/man1
-	HELP2MAN_DESCRIPTION="Open-source GNSS Monitoring Project"
-	$(foreach binaryfile,$(PROGRAMS),help2man -N -n "$(HELP2MAN_DESCRIPTION)" ./$(binaryfile) | gzip > $(DESTDIR)$(prefix)/share/man/man1/$(binaryfile).1.gz;)
-	@echo until these binaries support --help and --version remove the broken output
-	rm -f $(DESTDIR)$(prefix)/share/man/man1/rinreport.1.gz
-	rm -f $(DESTDIR)$(prefix)/share/man/man1/rtcmtool.1.gz
-	rm -f $(DESTDIR)$(prefix)/share/man/man1/testrunner.1.gz
+	@set -e; \
+	HELP2MAN_DESCRIPTION="Open-source GNSS Monitoring Project"; \
+	for binaryfile in $(PROGRAMS); do \
+		manbase="$(DESTDIR)$(prefix)/share/man/man1/$${binaryfile}.1"; \
+		if ! help2man -N -n "$$HELP2MAN_DESCRIPTION" "./$${binaryfile}" > "$$manbase"; then \
+			rm -f "$$manbase" "$$manbase.gz"; \
+			echo "help2man failed for $${binaryfile}; ensure --help and --version work" >&2; \
+			exit 1; \
+		fi; \
+		gzip -f "$$manbase"; \
+	done
 
 install: $(PROGRAMS) help2man
 	$(INSTALL) -m 755 -d $(DESTDIR)$(prefix)/bin
@@ -146,5 +151,12 @@ testrunner: navmon.pb.o testrunner.o ubx.o bits.o  galileo.o  gps.o beidou.o eph
 gndate: gndate.o githash.o  navmon.o
 	$(CXX) $(GCCSTD) $^ -o $@ -L/usr/local/lib -lfmt
 
-check: testrunner
+check: testrunner ubxtool
 	./testrunner
+	python3 ./tools/ubxtool_safety_harness.py --iterations 10
+
+ubxtool-safety-check: ubxtool
+	python3 ./tools/ubxtool_safety_harness.py
+
+ubxtool-safety-valgrind-check: ubxtool
+	python3 ./tools/ubxtool_safety_harness.py --iterations 50 --valgrind
