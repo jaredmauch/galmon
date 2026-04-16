@@ -4,6 +4,7 @@
 #include <string.h>
 #include <signal.h>
 #include <time.h>
+#include <cstdlib>
 #include "bits.hh"
 #include <sys/time.h>
 #include <arpa/inet.h>
@@ -17,6 +18,7 @@
 #include "fmt/os.h"
 #include "fmt/printf.h"
 #include "gps.hh"
+#include <google/protobuf/stubs/common.h>
 #include <vector>
 using namespace std;
 
@@ -134,6 +136,7 @@ try
 {
   time_t starttime=time(0);
   GOOGLE_PROTOBUF_VERIFY_VERSION;
+  std::atexit(google::protobuf::ShutdownProtobufLibrary);
   for(int n = 1; n < argc; ++n) {
     if(!strcmp(argv[n], "--version")) {
       showVersion(program, g_gitHash);

@@ -3,11 +3,13 @@
 #include <vector>
 #include <iostream>
 #include <signal.h>
+#include <cstdlib>
 #include "nmmsender.hh"
 #include "CLI/CLI.hpp"
 #include "swrappers.hh"
 #include "sclasses.hh"
 #include "version.hh"
+#include <google/protobuf/stubs/common.h>
 
 using namespace std;
 
@@ -115,6 +117,7 @@ int main(int argc, char** argv)
 {
   //  time_t starttime=time(0);
   GOOGLE_PROTOBUF_VERIFY_VERSION;
+  std::atexit(google::protobuf::ShutdownProtobufLibrary);
   for(int n = 1; n < argc; ++n) {
     if(!strcmp(argv[n], "--version")) {
       showVersion(program, g_gitHash);
