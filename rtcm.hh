@@ -15,6 +15,17 @@ class RTCMReader
 {
 public:
   explicit RTCMReader(int fd) : d_fp(fdopen(fd, "r")) {}
+  ~RTCMReader()
+  {
+    if(d_fp) {
+      fclose(d_fp);
+      d_fp = nullptr;
+    }
+  }
+  RTCMReader(const RTCMReader&) = delete;
+  RTCMReader& operator=(const RTCMReader&) = delete;
+  RTCMReader(RTCMReader&&) = delete;
+  RTCMReader& operator=(RTCMReader&&) = delete;
   bool get(RTCMFrame& rf);
 private:
   FILE* d_fp;

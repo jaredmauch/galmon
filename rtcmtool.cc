@@ -178,4 +178,5 @@ int main(int argc, char** argv)
 
     //    rm.parse(rf.payload);
   }
+  return 0;
 }
