@@ -159,6 +159,7 @@ check: testrunner ubxtool navparse
 	python3 ./tools/rtcmtool_septool_fixture_harness.py
 	python3 ./tools/rinreport_rinjoin_fixture_harness.py
 	python3 ./tools/nav_pipeline_fixture_harness.py
+	python3 ./tools/sp3feed_fixture_harness.py
 
 check-valgrind: testrunner ubxtool navparse navdump rtcmtool septool rinreport rinjoin
 	@command -v valgrind >/dev/null 2>&1 || { echo "valgrind is required for check-valgrind"; exit 1; }
@@ -168,6 +169,7 @@ check-valgrind: testrunner ubxtool navparse navdump rtcmtool septool rinreport r
 	python3 ./tools/navparse_navdump_fixture_harness.py --valgrind
 	python3 ./tools/rtcmtool_septool_fixture_harness.py --valgrind
 	python3 ./tools/rinreport_rinjoin_fixture_harness.py --valgrind
+	python3 ./tools/sp3feed_fixture_harness.py
 
 ubxtool-safety-check: ubxtool
 	python3 ./tools/ubxtool_safety_harness.py
@@ -196,6 +198,9 @@ rinreport-rinjoin-fixture-check: rinreport rinjoin
 
 nav-pipeline-fixture-check: navrecv navmerge navcat navnexus
 	python3 ./tools/nav_pipeline_fixture_harness.py
+
+sp3feed-fixture-check: sp3feed
+	python3 ./tools/sp3feed_fixture_harness.py
 
 coverage:
 	$(MAKE) clean

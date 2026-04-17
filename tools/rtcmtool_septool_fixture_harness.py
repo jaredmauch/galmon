@@ -82,6 +82,72 @@ def assert_garbage_stdin_no_crash(
     return True
 
 
+def build_septentrio_frame(message_id: int, payload: bytes) -> bytes:
+    # Layout expected by getSEPMessage():
+    # '$@' + 2 CRC bytes + 2 block-id bytes + 2 length bytes + payload
+    total_len = 8 + len(payload)
+    if total_len > 0xFFFF:
+        raise ValueError("payload too large for synthetic Septentrio frame")
+    return b"$@" + b"\x00\x00" + message_id.to_bytes(2, "little") + total_len.to_bytes(2, "little") + payload
+
+
+def assert_septool_short_inav_payload(root: Path, use_valgrind: bool, valgrind_error_exitcode: int) -> bool:
+    binary = root / "septool"
+    # 4023 is the I/NAV block handled early in septool; a short payload should be skipped cleanly.
+    frame = build_septentrio_frame(4023, b"\x00" * 8)
+    rc, out = run_and_capture(
+        binary,
+        ["--station", "1"],
+        data=frame,
+        use_valgrind=use_valgrind,
+        valgrind_error_exitcode=valgrind_error_exitcode,
+    )
+    if rc != 0:
+        print(f"septool: short-inav expected exit=0, got {rc}")
+        print(out)
+        return False
+    if "Short SEPInav payload, skipping" not in out:
+        print("septool: short-inav did not report defensive short-payload handling")
+        print(out)
+        return False
+    print("septool: short-inav payload handled safely")
+    return True
+
+
+def assert_septool_unknown_message_logging(
+    root: Path, quiet: bool, use_valgrind: bool, valgrind_error_exitcode: int
+) -> bool:
+    binary = root / "septool"
+    frame = build_septentrio_frame(999, b"\x00" * 4)
+    args = ["--station", "1"]
+    label = "unknown-message"
+    if quiet:
+        args.extend(["--quiet", "true"])
+        label += "-quiet"
+    rc, out = run_and_capture(
+        binary,
+        args,
+        data=frame,
+        use_valgrind=use_valgrind,
+        valgrind_error_exitcode=valgrind_error_exitcode,
+    )
+    if rc != 0:
+        print(f"septool: {label} expected exit=0, got {rc}")
+        print(out)
+        return False
+    has_unknown = "Unknown message 999 / 999" in out
+    if quiet and has_unknown:
+        print("septool: --quiet should suppress unknown-message log output")
+        print(out)
+        return False
+    if not quiet and not has_unknown:
+        print("septool: unknown-message path did not emit expected diagnostic")
+        print(out)
+        return False
+    print(f"septool: {label} branch behaved as expected")
+    return True
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run fixture checks for rtcmtool/septool.")
     parser.add_argument("--valgrind", action="store_true", help="Run app invocations under valgrind memcheck.")
@@ -114,6 +180,12 @@ def main() -> int:
     if not assert_garbage_stdin_no_crash(
         root, "septool", ["--station", "1"], args.valgrind, args.valgrind_error_exitcode
     ):
+        failed = True
+    if not assert_septool_short_inav_payload(root, args.valgrind, args.valgrind_error_exitcode):
+        failed = True
+    if not assert_septool_unknown_message_logging(root, False, args.valgrind, args.valgrind_error_exitcode):
+        failed = True
+    if not assert_septool_unknown_message_logging(root, True, args.valgrind, args.valgrind_error_exitcode):
         failed = True
 
     return 1 if failed else 0

@@ -12,6 +12,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <httplib.h>
 #include <nlohmann/json.hpp>
 #include <thread>
@@ -48,6 +49,80 @@ TEST_CASE("sp3") {
   CHECK(e.sv == 2);
   CHECK(e.clockBias == 1000.0 * -306.607761);
   
+}
+
+TEST_CASE("sp3 parses synthetic GPS and Galileo entries with unit conversion") {
+  const char* path = "test_sp3_basic.sp3";
+  {
+    FILE* fp = fopen(path, "w");
+    REQUIRE(fp != nullptr);
+    fputs("*  2026  4 16 12 34 56.00000000\n", fp);
+    fputs("PG12  12345.678901  -23456.789012   34567.890123    123.456789\n", fp);
+    fputs("PE11  -1000.000000   2000.500000   -3000.250000    -10.000000\n", fp);
+    fclose(fp);
+  }
+
+  SP3Reader sp3(path);
+  SP3Entry e{};
+  REQUIRE(sp3.get(e));
+  CHECK(e.gnss == 0);
+  CHECK(e.sv == 12);
+  CHECK(e.x == doctest::Approx(12345.678901 * 1000.0));
+  CHECK(e.y == doctest::Approx(-23456.789012 * 1000.0));
+  CHECK(e.z == doctest::Approx(34567.890123 * 1000.0));
+  CHECK(e.clockBias == doctest::Approx(123.456789 * 1000.0));
+
+  struct tm tm{};
+  tm.tm_year = 2026 - 1900;
+  tm.tm_mon = 4 - 1;
+  tm.tm_mday = 16;
+  tm.tm_hour = 12;
+  tm.tm_min = 34;
+  tm.tm_sec = 56;
+  CHECK(e.t == timegm(&tm) - 18);
+
+  REQUIRE(sp3.get(e));
+  CHECK(e.gnss == 2);
+  CHECK(e.sv == 11);
+  CHECK(e.x == doctest::Approx(-1000.0 * 1000.0));
+  CHECK(e.y == doctest::Approx(2000.5 * 1000.0));
+  CHECK(e.z == doctest::Approx(-3000.25 * 1000.0));
+  CHECK(e.clockBias == doctest::Approx(-10.0 * 1000.0));
+
+  CHECK_FALSE(sp3.get(e));
+  remove(path);
+}
+
+TEST_CASE("sp3 skips unsupported constellations and keeps epoch for later records") {
+  const char* path = "test_sp3_skip.sp3";
+  {
+    FILE* fp = fopen(path, "w");
+    REQUIRE(fp != nullptr);
+    fputs("*  2024  1  2  3  4  5.00000000\n", fp);
+    fputs("PR01   1111.000000   2222.000000   3333.000000      1.000000\n", fp);
+    fputs("PC07   4444.000000   5555.000000   6666.000000      2.500000\n", fp);
+    fclose(fp);
+  }
+
+  SP3Reader sp3(path);
+  SP3Entry e{};
+  REQUIRE(sp3.get(e));
+  CHECK(e.gnss == 3);
+  CHECK(e.sv == 7);
+  CHECK(e.x == doctest::Approx(4444.0 * 1000.0));
+  CHECK(e.clockBias == doctest::Approx(2.5 * 1000.0));
+
+  struct tm tm{};
+  tm.tm_year = 2024 - 1900;
+  tm.tm_mon = 1 - 1;
+  tm.tm_mday = 2;
+  tm.tm_hour = 3;
+  tm.tm_min = 4;
+  tm.tm_sec = 5;
+  CHECK(e.t == timegm(&tm) - 18);
+
+  CHECK_FALSE(sp3.get(e));
+  remove(path);
 }
 
 #include "rinex.hh"

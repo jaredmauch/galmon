@@ -76,7 +76,7 @@ bool SP3Reader::get(SP3Entry& entry)
           else if(token[1]=='C')
             entry.gnss = 3;
           else
-            continue;
+            break;
           entry.sv = atoi(token.c_str()+2);
         }
         double val = atof(token.c_str());
@@ -90,6 +90,8 @@ bool SP3Reader::get(SP3Entry& entry)
           entry.clockBias = 1000.0*val; // want nanoseconds
         num++;
       }
+      if(!num)
+        continue;
       entry.t = d_time;
       return true;
     }
