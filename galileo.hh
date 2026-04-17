@@ -9,6 +9,12 @@
 
 bool getTOWFromInav(const std::vector<uint8_t>& inav, uint32_t *satTOW, uint16_t *wn);
 
+struct GalileoOffset
+{
+  double first;
+  double second;
+};
+
 struct GalileoMessage : GPSLikeEphemeris
 {
   uint8_t wtype;
@@ -210,7 +216,7 @@ struct GalileoMessage : GPSLikeEphemeris
   }
 
   // pair of nanosecond, nanosecond/s 
-  std::pair<double, double> getAtomicOffset(int tow) const
+  GalileoOffset getAtomicOffset(int tow) const
   {
     int delta = ephAge(tow, getT0c());
     //           2^-34      2^-46                            2^-59
@@ -222,7 +228,7 @@ struct GalileoMessage : GPSLikeEphemeris
     return {factor * cur, factor * trend};
   }
 
-  std::pair<double, double> getUTCOffset(int tow, int wn) const
+  GalileoOffset getUTCOffset(int tow, int wn) const
   {
     int dw = (int)(uint8_t)wn - (int)(uint8_t) wn0t;
     int delta = dw*7*86400  + tow - getT0t(); // NOT ephemeris age tricks
@@ -240,7 +246,7 @@ struct GalileoMessage : GPSLikeEphemeris
     return {factor * cur, factor * trend};
   }
   // pair of nanosecond, nanosecond/s 
-  std::pair<double, double> getGPSOffset(int tow, int wn) const
+  GalileoOffset getGPSOffset(int tow, int wn) const
   {
     int dw = (int)(wn%64) - (int)(wn0g%64);
     if(dw > 31)
@@ -475,7 +481,7 @@ struct REDCEDAdaptor
   double getOmega()     const { return atan2(d_gm.eyred, d_gm.exred);   } // radians
 
   // pair of nanosecond, nanosecond/s 
-  std::pair<double, double> getAtomicOffset(int tow) const
+  GalileoOffset getAtomicOffset(int tow) const
   {
     int delta = ephAge(tow, d_t0r);
     //           2^-26         2^-35                 
